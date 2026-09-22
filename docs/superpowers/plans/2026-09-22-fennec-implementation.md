@@ -1577,6 +1577,7 @@ public protocol Transcriber: Sendable {
 public enum TranscriberError: Error, Equatable {
     case notPrepared
     case emptyResult
+    case sampleRateMismatch(expected: Double, got: Double)
 }
 ```
 
@@ -1671,8 +1672,8 @@ public actor VozTranscriber: Transcriber {
     public func prepare(progress: (@Sendable (Double) -> Void)? = nil) async throws {
         guard voz == nil else { return }
         if !Voz.isDownloaded() {
-            _ = try await Voz.download { fraction in
-                progress?(fraction)
+            _ = try await Voz.download { download in
+                progress?(download.fraction)
             }
         }
         let instance = try await Voz()
@@ -1684,7 +1685,10 @@ public actor VozTranscriber: Transcriber {
 
     public func transcribe(samples: [Float], sampleRate: Double) async throws -> Transcript {
         guard let voz else { throw TranscriberError.notPrepared }
-        let result = try await voz.transcribe(samples: samples, sampleRate: sampleRate)
+        guard sampleRate == voz.sampleRate else {
+            throw TranscriberError.sampleRateMismatch(expected: voz.sampleRate, got: sampleRate)
+        }
+        let result = try await voz.transcribe(samples: samples)
         let words = result.words.map { Word(text: $0.text, start: $0.start, end: $0.end) }
         return Transcript(text: result.text, words: words)
     }
@@ -1738,7 +1742,6 @@ guard arguments.count >= 2 else {
     commands:
       probe <audio-file>
       transcribe <audio-file> [--cleanup] [--dictionary <path>] [--json] [--timings]
-      paste --text "..." [--auto-send]
     """, code: 64)
 }
 
@@ -1815,12 +1818,6 @@ case "probe", "transcribe":
     } catch {
         fail("\(error)")
     }
-
-case "paste":
-    guard let textIndex = rest.firstIndex(of: "--text"), rest.indices.contains(textIndex + 1) else {
-        fail("usage: fennec paste --text \"...\" [--auto-send]", code: 64)
-    }
-    await Injector().paste(rest[textIndex + 1], autoSend: rest.contains("--auto-send"))
 
 default:
     fail("unknown command '\(command)'", code: 64)
@@ -2125,7 +2122,22 @@ public actor Injector {
 Run: `swift test --filter InjectionTests`
 Expected: 5 tests pass.
 
-- [ ] **Step 6: Verify real paste behavior manually**
+- [ ] **Step 6: Add the paste command to the CLI**
+
+In `Sources/FennecCLI/main.swift`, add `paste --text "..." [--auto-send]` to the usage text and add this case before `default:`:
+
+```swift
+case "paste":
+    guard let textIndex = rest.firstIndex(of: "--text"), rest.indices.contains(textIndex + 1) else {
+        fail("usage: fennec paste --text \"...\" [--auto-send]", code: 64)
+    }
+    await Injector().paste(rest[textIndex + 1], autoSend: rest.contains("--auto-send"))
+```
+
+Run: `swift build`
+Expected: builds.
+
+- [ ] **Step 7: Verify real paste behavior manually**
 
 The terminal app running the command needs Accessibility permission for this test (System Settings, Privacy and Security, Accessibility). Note that the bundled app gets its own grant later.
 
@@ -2138,7 +2150,7 @@ Expected: the text appears on the command line but is not executed.
 Run: `swift run fennec paste --text "echo fennec-auto-send-check" --auto-send` with a shell prompt focused.
 Expected: the command runs. This is the only path that sends Return.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add Sources/FennecCore/InjectionPolicy.swift Sources/FennecCore/ClipboardGuard.swift Sources/FennecCore/Injector.swift Tests/FennecCoreTests/InjectionTests.swift Sources/FennecCLI/main.swift
