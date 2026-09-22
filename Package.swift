@@ -12,6 +12,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/Desert-Ant-Labs/desert-ant-core.git", from: "3.3.0"),
+        .package(url: "https://github.com/swiftlang/swift-testing.git", exact: "6.2.4"),
     ],
     targets: [
         .target(name: "FennecCore"),
@@ -21,6 +22,9 @@ let package = Package(
         ]),
         .executableTarget(name: "FennecApp", dependencies: ["FennecCore", "FennecEngine"]),
         .executableTarget(name: "FennecCLI", dependencies: ["FennecCore", "FennecEngine"]),
-        .testTarget(name: "FennecCoreTests", dependencies: ["FennecCore"]),
+        .testTarget(name: "FennecCoreTests", dependencies: [
+            "FennecCore",
+            .product(name: "Testing", package: "swift-testing"),
+        ]),
     ]
 )
