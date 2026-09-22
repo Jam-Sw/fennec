@@ -1,1 +1,8 @@
 .superpowers/
+.build/
+.swiftpm/
+.DS_Store
+fixtures/*.aiff
+fixtures/*.wav
+*.p12
+*.pem
