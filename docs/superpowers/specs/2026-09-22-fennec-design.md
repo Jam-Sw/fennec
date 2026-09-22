@@ -33,7 +33,7 @@ Fennec is a personal menu-bar app for macOS that turns speech into text in whate
 
 ## Architecture
 
-Repo: `~/Code/fennec`, a SwiftPM package.
+Repo: `~/Documents/tools/fennec`, a SwiftPM package.
 
 Targets:
 
