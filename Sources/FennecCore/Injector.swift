@@ -21,6 +21,13 @@ public actor Injector {
         self.postKey = postKey
     }
 
+    /// Captures the current pasteboard contents. Call this at key-down, while
+    /// the user is still speaking, so the (potentially large) capture is off
+    /// the paste critical path; hand the result to `paste(priorSnapshot:)`.
+    public func snapshotToken() -> ClipboardSnapshotToken {
+        ClipboardTransaction.snapshotToken(pasteboard)
+    }
+
     /// Write the text, let the focused app settle, then post Cmd+V.
     ///
     /// `verifyTarget` runs again immediately before the keystrokes, so a focus
@@ -30,17 +37,29 @@ public actor Injector {
     public func paste(
         _ text: String,
         autoSend: Bool,
-        verifyTarget: (@Sendable () async -> Bool)? = nil
+        verifyTarget: (@Sendable () async -> Bool)? = nil,
+        priorSnapshot: ClipboardSnapshotToken? = nil,
+        settleSeconds: Double = 0.02,
+        since start: CFAbsoluteTime? = nil,
+        onStage: (@Sendable (String, Int) -> Void)? = nil
     ) async -> Bool {
-        let write = ClipboardTransaction.write(text, to: pasteboard)
-        try? await Task.sleep(nanoseconds: 100_000_000)
+        func mark(_ stage: String) {
+            guard let start, let onStage else { return }
+            onStage(stage, Int((CFAbsoluteTimeGetCurrent() - start) * 1000))
+        }
+        let write = ClipboardTransaction.write(text, to: pasteboard, priorSnapshot: priorSnapshot)
+        mark("snapshot")
+        try? await Task.sleep(nanoseconds: UInt64(max(0, settleSeconds) * 1_000_000_000))
+        mark("settle")
         if let verifyTarget, await verifyTarget() == false {
             return false
         }
-        postKey(await MainActor.run { Self.pasteKeyCode() }, .maskCommand)
+        postKey(await MainActor.run { Self.cachedPasteKeyCode() }, .maskCommand)
+        mark("post")
         if autoSend {
             try? await Task.sleep(nanoseconds: 150_000_000)
             if let verifyTarget, await verifyTarget() == false {
+                ClipboardTransaction.restore(write, to: pasteboard)
                 return false
             }
             postKey(36, [])
@@ -48,6 +67,38 @@ public actor Injector {
         try? await Task.sleep(nanoseconds: 150_000_000)
         ClipboardTransaction.restore(write, to: pasteboard)
         return true
+    }
+
+    /// Caches `pasteKeyCode()` so a paste doesn't pay for a 128-code
+    /// `UCKeyTranslate` scan every time; invalidated when the keyboard input
+    /// source changes.
+    @MainActor
+    private final class PasteKeyCodeCache {
+        static let shared = PasteKeyCodeCache()
+        private var cached: CGKeyCode?
+        private var observer: NSObjectProtocol?
+
+        private init() {
+            observer = DistributedNotificationCenter.default().addObserver(
+                forName: Notification.Name(kTISNotifySelectedKeyboardInputSourceChanged as String),
+                object: nil,
+                queue: nil
+            ) { [weak self] _ in
+                Task { @MainActor in self?.cached = nil }
+            }
+        }
+
+        func keyCode() -> CGKeyCode {
+            if let cached { return cached }
+            let value = Injector.pasteKeyCode()
+            cached = value
+            return value
+        }
+    }
+
+    @MainActor
+    public static func cachedPasteKeyCode() -> CGKeyCode {
+        PasteKeyCodeCache.shared.keyCode()
     }
 
     /// The key that gives "v" with Command held in the current keyboard layout,

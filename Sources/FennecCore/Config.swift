@@ -31,6 +31,7 @@ public struct Config: Codable, Equatable, Sendable {
     public var maxDurationSeconds: Double = 120
     public var minDurationSeconds: Double = 0.3
     public var preRollSeconds: Double = 0.5
+    public var pasteSettleSeconds: Double = 0.02
     public var dictionaryPath: String = "~/.config/fennec/dictionary.txt"
     public var debugLogging: Bool = false
     public var punctuationCommands: [String: String] = [:]
@@ -94,6 +95,7 @@ public struct Config: Codable, Equatable, Sendable {
         if let value = raw.maxDurationSeconds { config.maxDurationSeconds = value }
         if let value = raw.minDurationSeconds { config.minDurationSeconds = value }
         if let value = raw.preRollSeconds { config.preRollSeconds = value }
+        if let value = raw.pasteSettleSeconds { config.pasteSettleSeconds = value }
         if let value = raw.dictionaryPath { config.dictionaryPath = value }
         if let value = raw.debugLogging { config.debugLogging = value }
         if let value = raw.punctuationCommands { config.punctuationCommands = value }
@@ -110,6 +112,7 @@ public struct Config: Codable, Equatable, Sendable {
         var maxDurationSeconds: Double?
         var minDurationSeconds: Double?
         var preRollSeconds: Double?
+        var pasteSettleSeconds: Double?
         var dictionaryPath: String?
         var debugLogging: Bool?
         var punctuationCommands: [String: String]?

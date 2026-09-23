@@ -17,6 +17,19 @@ public struct PasteboardToken: Equatable, Sendable {
     public var writtenString: String
 }
 
+/// A snapshot taken ahead of the write it will back - at key-down, while the
+/// user is still speaking, instead of on the critical path at paste time.
+/// Still valid at write time only if `changeCount` hasn't moved since.
+public struct ClipboardSnapshotToken: Sendable {
+    public var snapshot: ClipboardSnapshot
+    public var changeCount: Int
+
+    public init(snapshot: ClipboardSnapshot, changeCount: Int) {
+        self.snapshot = snapshot
+        self.changeCount = changeCount
+    }
+}
+
 public struct ClipboardWrite: Sendable {
     public var token: PasteboardToken
     public var snapshot: ClipboardSnapshot
@@ -42,8 +55,25 @@ public enum ClipboardTransaction {
         return ClipboardSnapshot(items: items)
     }
 
-    public static func write(_ text: String, to pasteboard: NSPasteboard) -> ClipboardWrite {
-        let snapshot = capture(pasteboard)
+    public static func snapshotToken(_ pasteboard: NSPasteboard) -> ClipboardSnapshotToken {
+        ClipboardSnapshotToken(snapshot: capture(pasteboard), changeCount: pasteboard.changeCount)
+    }
+
+    /// Reuses `priorSnapshot` when it's still current (its `changeCount`
+    /// matches the pasteboard's), so the (potentially large) capture doesn't
+    /// have to happen on the paste critical path. Falls back to a fresh
+    /// capture when it's stale or absent.
+    public static func write(
+        _ text: String,
+        to pasteboard: NSPasteboard,
+        priorSnapshot: ClipboardSnapshotToken? = nil
+    ) -> ClipboardWrite {
+        let snapshot: ClipboardSnapshot
+        if let priorSnapshot, priorSnapshot.changeCount == pasteboard.changeCount {
+            snapshot = priorSnapshot.snapshot
+        } else {
+            snapshot = capture(pasteboard)
+        }
         pasteboard.clearContents()
         let item = NSPasteboardItem()
         item.setString(text, forType: .string)
