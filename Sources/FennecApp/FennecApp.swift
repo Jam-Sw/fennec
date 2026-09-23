@@ -1,8 +1,13 @@
-import Foundation
+import AppKit
 
 @main
 struct FennecApp {
+    @MainActor
     static func main() {
-        print("Fennec app scaffold. The menu bar app arrives in Task 12.")
+        let application = NSApplication.shared
+        application.setActivationPolicy(.accessory)
+        let controller = AppController()
+        controller.start()
+        application.run()
     }
 }
