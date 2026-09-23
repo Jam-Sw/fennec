@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Fennec: a fennec fox, all ears. The mascot without a background. -->
+  <defs>
+    <linearGradient id="fur" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F9BA6E"/>
+      <stop offset="1" stop-color="#E8854A"/>
+    </linearGradient>
+    <linearGradient id="inner" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFE6CC"/>
+      <stop offset="1" stop-color="#F7B996"/>
+    </linearGradient>
+  </defs>
+  <!-- ears -->
+  <path d="M472 474 C430 360 322 226 196 140 C182 290 214 456 322 568 Z" fill="url(#fur)"/>
+  <path d="M552 474 C594 360 702 226 828 140 C842 290 810 456 702 568 Z" fill="url(#fur)"/>
+  <path d="M442 476 C404 390 324 286 242 218 C240 330 268 446 340 528 Z" fill="url(#inner)"/>
+  <path d="M582 476 C620 390 700 286 782 218 C784 330 756 446 684 528 Z" fill="url(#inner)"/>
+  <!-- head with cheek tufts -->
+  <path d="M512 800 C456 794 372 716 326 644 L270 632 L302 604 L276 574 L314 558 C330 494 406 452 512 450 C618 452 694 494 710 558 L748 574 L722 604 L754 632 L698 644 C652 716 568 794 512 800 Z" fill="url(#fur)"/>
+  <!-- cheek mask -->
+  <path d="M512 800 C466 796 400 736 358 660 C420 686 478 678 512 648 C546 678 604 686 666 660 C624 736 558 796 512 800 Z" fill="#FFF4E6"/>
+  <!-- eyes -->
+  <ellipse cx="444" cy="590" rx="25" ry="29" fill="#2B2238"/>
+  <ellipse cx="580" cy="590" rx="25" ry="29" fill="#2B2238"/>
+  <circle cx="453" cy="579" r="9" fill="#FFF4E6"/>
+  <circle cx="589" cy="579" r="9" fill="#FFF4E6"/>
+  <!-- nose -->
+  <path d="M486 734 C486 720 538 720 538 734 C538 750 524 762 512 762 C500 762 486 750 486 734 Z" fill="#2B2238"/>
+</svg>

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="160 120 704 704">
+  <!-- Menu bar template glyph. The app draws the same shapes in MenuBarGlyph.swift. -->
+  <defs>
+    <mask id="cut">
+      <rect x="0" y="0" width="1024" height="1024" fill="#fff"/>
+      <path d="M430 500 C398 410 322 300 250 236 C250 330 274 436 330 510 Z" fill="#000"/>
+      <path d="M594 500 C626 410 702 300 774 236 C774 330 750 436 694 510 Z" fill="#000"/>
+      <ellipse cx="440" cy="596" rx="36" ry="42" fill="#000"/>
+      <ellipse cx="584" cy="596" rx="36" ry="42" fill="#000"/>
+    </mask>
+  </defs>
+  <g mask="url(#cut)" fill="#000">
+    <path d="M472 474 C430 360 322 226 196 140 C182 290 214 456 322 568 Z"/>
+    <path d="M552 474 C594 360 702 226 828 140 C842 290 810 456 702 568 Z"/>
+    <path d="M512 800 C456 794 356 700 300 610 C290 520 400 452 512 450 C624 452 734 520 724 610 C668 700 568 794 512 800 Z"/>
+  </g>
+</svg>

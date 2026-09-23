@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Fennec app icon: the mascot peeking over a dune at dusk. Regenerate AppIcon.icns with scripts/make-icon.sh. -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1C1838"/>
+      <stop offset="0.62" stop-color="#3B2A5E"/>
+      <stop offset="1" stop-color="#8A4A6B"/>
+    </linearGradient>
+    <linearGradient id="dune" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E9A263"/>
+      <stop offset="1" stop-color="#C46F45"/>
+    </linearGradient>
+    <clipPath id="tile"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+    <linearGradient id="fur" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F9BA6E"/>
+      <stop offset="1" stop-color="#E8854A"/>
+    </linearGradient>
+    <linearGradient id="inner" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFE6CC"/>
+      <stop offset="1" stop-color="#F7B996"/>
+    </linearGradient>
+  </defs>
+  <g clip-path="url(#tile)">
+    <rect x="100" y="100" width="824" height="824" fill="url(#sky)"/>
+    <g fill="#FFF4E6">
+      <circle cx="214" cy="236" r="6" opacity="0.8"/>
+      <circle cx="318" cy="170" r="4" opacity="0.6"/>
+      <circle cx="770" cy="196" r="5" opacity="0.7"/>
+      <circle cx="846" cy="330" r="4" opacity="0.5"/>
+      <circle cx="170" cy="400" r="4" opacity="0.5"/>
+      <circle cx="512" cy="186" r="5" opacity="0.7"/>
+    </g>
+    <path d="M100 760 C260 700 420 720 560 760 C700 800 820 770 924 720 L924 924 L100 924 Z" fill="#6B3D5E"/>
+    <g transform="translate(512 520) scale(0.84) translate(-512 -470)">
+  <!-- ears -->
+  <path d="M472 474 C430 360 322 226 196 140 C182 290 214 456 322 568 Z" fill="url(#fur)"/>
+  <path d="M552 474 C594 360 702 226 828 140 C842 290 810 456 702 568 Z" fill="url(#fur)"/>
+  <path d="M442 476 C404 390 324 286 242 218 C240 330 268 446 340 528 Z" fill="url(#inner)"/>
+  <path d="M582 476 C620 390 700 286 782 218 C784 330 756 446 684 528 Z" fill="url(#inner)"/>
+  <!-- head with cheek tufts -->
+  <path d="M512 800 C456 794 372 716 326 644 L270 632 L302 604 L276 574 L314 558 C330 494 406 452 512 450 C618 452 694 494 710 558 L748 574 L722 604 L754 632 L698 644 C652 716 568 794 512 800 Z" fill="url(#fur)"/>
+  <!-- cheek mask -->
+  <path d="M512 800 C466 796 400 736 358 660 C420 686 478 678 512 648 C546 678 604 686 666 660 C624 736 558 796 512 800 Z" fill="#FFF4E6"/>
+  <!-- eyes -->
+  <ellipse cx="444" cy="590" rx="25" ry="29" fill="#2B2238"/>
+  <ellipse cx="580" cy="590" rx="25" ry="29" fill="#2B2238"/>
+  <circle cx="453" cy="579" r="9" fill="#FFF4E6"/>
+  <circle cx="589" cy="579" r="9" fill="#FFF4E6"/>
+  <!-- nose -->
+  <path d="M486 734 C486 720 538 720 538 734 C538 750 524 762 512 762 C500 762 486 750 486 734 Z" fill="#2B2238"/>
+    </g>
+    <path d="M100 850 C300 770 520 790 700 830 C800 852 870 840 924 816 L924 924 L100 924 Z" fill="url(#dune)"/>
+  </g>
+</svg>

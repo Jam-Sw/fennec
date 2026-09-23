@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift version
+        run: swift --version
+      - name: Test
+        run: swift test
+      - name: Build the app
+        run: swift build -c release --product Fennec
+      - name: Check the scripts parse
+        run: |
+          zsh -n install.sh
+          zsh -n uninstall.sh
+          zsh -n scripts/build-app.sh
