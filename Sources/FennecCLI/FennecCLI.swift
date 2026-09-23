@@ -12,6 +12,7 @@ struct FennecCLI {
             commands:
               probe <audio-file>
               transcribe <audio-file> [--cleanup] [--dictionary <path>] [--json] [--timings]
+              paste --text "..." [--auto-send]
             """, code: 64)
         }
 
@@ -88,6 +89,12 @@ struct FennecCLI {
             } catch {
                 fail("\(error)")
             }
+
+        case "paste":
+            guard let textIndex = rest.firstIndex(of: "--text"), rest.indices.contains(textIndex + 1) else {
+                fail("usage: fennec paste --text \"...\" [--auto-send]", code: 64)
+            }
+            await Injector().paste(rest[textIndex + 1], autoSend: rest.contains("--auto-send"))
 
         default:
             fail("unknown command '\(command)'", code: 64)
