@@ -65,3 +65,14 @@ import Testing
     #expect(rules["tick"]?.replacement == "`")
     #expect(rules["tick"]?.spacing == .normal)
 }
+
+@Test func newLineCommandWithAsrPunctuation() {
+    let words = [
+        Word(text: "Done", start: 0.0, end: 0.4),
+        Word(text: "New", start: 0.9, end: 1.1),
+        Word(text: "line.", start: 1.15, end: 1.5),
+        Word(text: "Next", start: 2.0, end: 2.3),
+    ]
+    let tokens = Punctuation.apply(to: words.map(\.token))
+    #expect(tokens.map(\.text) == ["Done", "\n", "Next"])
+}

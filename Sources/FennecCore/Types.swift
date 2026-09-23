@@ -54,3 +54,11 @@ public struct Token: Equatable, Sendable {
         self.spacing = spacing
     }
 }
+
+public extension Token {
+    /// The token text with edge punctuation removed, for matching against
+    /// dictionaries and spoken commands. Voz attaches sentence punctuation to words.
+    var cleanedText: String {
+        text.trimmingCharacters(in: .punctuationCharacters)
+    }
+}

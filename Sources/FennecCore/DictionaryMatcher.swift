@@ -43,8 +43,8 @@ public enum DictionaryMatcher {
                         .allSatisfy { $1.start - $0.end < maxGap }
                     guard contiguous else { continue }
                 }
-                let key = normalize(slice.map(\.text).joined())
-                guard let canonical = lookup[key] else { continue }
+                let key = normalize(slice.map { $0.cleanedText }.joined())
+                guard !key.isEmpty, let canonical = lookup[key] else { continue }
                 result.append(DictionaryMatch(range: index ..< (index + size), canonical: canonical))
                 index += size
                 matched = true
@@ -64,8 +64,11 @@ public enum DictionaryMatcher {
                 output.append(contentsOf: tokens[cursor ..< match.range.lowerBound])
             }
             let slice = tokens[match.range]
+            let trailing = slice.last.map { token in
+                String(token.text.reversed().prefix { $0.isPunctuation }.reversed())
+            } ?? ""
             output.append(Token(
-                text: match.canonical,
+                text: match.canonical + trailing,
                 start: slice.first?.start ?? 0,
                 end: slice.last?.end ?? 0,
                 isProtected: true

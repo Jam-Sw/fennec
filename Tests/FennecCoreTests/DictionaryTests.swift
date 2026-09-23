@@ -67,3 +67,17 @@ import Testing
     let dictionary = try TermDictionary.load(from: url)
     #expect(dictionary.entries.count == TermDictionary.builtIn.entries.count)
 }
+
+@Test func matchesTokensCarryingAsrPunctuation() {
+    let words = [
+        Word(text: "Send", start: 0, end: 0.3),
+        Word(text: "open", start: 0.35, end: 0.6),
+        Word(text: "code.", start: 0.65, end: 0.95),
+    ]
+    let tokens = words.map(\.token)
+    let matches = DictionaryMatcher.matches(in: tokens, dictionary: .builtIn)
+    #expect(matches.count == 1)
+    #expect(matches[0].canonical == "opencode")
+    let applied = DictionaryMatcher.apply(matches, to: tokens)
+    #expect(applied.map(\.text) == ["Send", "opencode."])
+}

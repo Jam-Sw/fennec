@@ -58,7 +58,7 @@ public enum Punctuation {
             let window = min(maxWindow, tokens.count - index)
             for size in stride(from: window, through: 1, by: -1) {
                 let slice = Array(tokens[index ..< index + size])
-                let phrase = slice.map { $0.text.lowercased() }.joined(separator: " ")
+                let phrase = slice.map { $0.cleanedText.lowercased() }.joined(separator: " ")
                 guard let rule = rules[phrase] else { continue }
                 let contiguous = zip(slice, slice.dropFirst())
                     .allSatisfy { $1.start - $0.end < minPause }
