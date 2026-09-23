@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 mkdir -p fixtures
 
-say -o fixtures/hello.aiff "Fennec dictation test. Send this to open code. [[slnc 500]] New line. Done."
+say -o fixtures/hello.aiff "Fennec dictation test. Send this to open code. [[slnc 500]] New line. [[slnc 500]] Done."
 afconvert -f WAVE -d LEI16@16000 -c 1 fixtures/hello.aiff fixtures/hello.wav
 
 python3 - <<'PY'
