@@ -39,3 +39,27 @@ import Testing
     buffer.append([1, 2, 3])
     #expect(buffer.drain().isEmpty)
 }
+
+private let fixturesRoot = URL(fileURLWithPath: #filePath)
+    .deletingLastPathComponent()
+    .deletingLastPathComponent()
+    .deletingLastPathComponent()
+
+@Test func audioFileLoaderLoads16KilohertzWave() throws {
+    let samples = try AudioFileLoader.loadSamples(at: fixturesRoot.appendingPathComponent("fixtures/hello.wav"))
+    #expect(samples.count == 81652)
+    #expect(samples.contains { $0 != 0 })
+}
+
+@Test func audioFileLoaderResamplesAiffTo16Kilohertz() throws {
+    let samples = try AudioFileLoader.loadSamples(at: fixturesRoot.appendingPathComponent("fixtures/hello.aiff"))
+    #expect(!samples.isEmpty)
+    #expect(abs(samples.count - 81652) <= 64)
+    #expect(samples.contains { abs($0) > 0.01 })
+}
+
+@Test func audioFileLoaderLoadsSilence() throws {
+    let samples = try AudioFileLoader.loadSamples(at: fixturesRoot.appendingPathComponent("fixtures/silence.wav"))
+    #expect(samples.count == 32000)
+    #expect(samples.allSatisfy { abs($0) < 0.01 })
+}
