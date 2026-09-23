@@ -212,6 +212,8 @@ main() {
     root="$SRC"
   fi
 
+  # Skip the test-only packages; see Package.swift.
+  export FENNEC_APP_ONLY=1
   step "Building Fennec (the first build takes a few minutes)"
   note "macOS may ask for your password once, to trust Fennec's signing certificate."
   build_and_install "$root"
