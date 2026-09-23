@@ -17,7 +17,7 @@ final class AppController {
     private var config = Config()
     private var dictionary = TermDictionary.builtIn
     private var lastTranscript = ""
-    private var targetPID: pid_t = 0
+    private var target = DictationTarget.capture(frontmostPID: nil)
     private var recordingStarted: CFAbsoluteTime = 0
     private var maxDurationTask: Task<Void, Never>?
 
@@ -51,7 +51,7 @@ final class AppController {
         if !Permissions.accessibilityGranted() || !Permissions.inputMonitoringGranted() {
             requestPermissions()
         }
-        tap = HotkeyTap()
+        tap = HotkeyTap(hotkey: config.hotkey)
         tap?.onEvent = { [weak self] event in
             Task { @MainActor in self?.handle(event) }
         }
@@ -90,7 +90,9 @@ final class AppController {
             menu.update(state: "Microphone permission needed")
             return
         }
-        targetPID = NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0
+        target = DictationTarget.capture(
+            frontmostPID: NSWorkspace.shared.frontmostApplication?.processIdentifier
+        )
         recordingStarted = CFAbsoluteTimeGetCurrent()
         do {
             let recorder = Recorder(preRollSeconds: config.preRollSeconds)
@@ -121,6 +123,9 @@ final class AppController {
     private func finishRecording(autoSend: Bool) async {
         maxDurationTask?.cancel()
         guard let recorder else { return }
+        let target = self.target
+        let config = self.config
+        let dictionary = self.dictionary
         let raw = recorder.stop()
         self.recorder = nil
         let keyUp = CFAbsoluteTimeGetCurrent()
@@ -149,21 +154,37 @@ final class AppController {
             )
             log("ready total_ms=\(Int((CFAbsoluteTimeGetCurrent() - keyUp) * 1000))")
 
-            let currentPID = NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0
+            let hasText = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let currentPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
             let outcome = InjectionPolicy.decide(
-                hasText: !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                focusChanged: currentPID != targetPID,
+                hasText: hasText,
+                focusChanged: !target.stillFocused(currentPID: currentPID),
                 secureInput: IsSecureEventInputEnabled(),
                 autoSend: autoSend
             )
 
+            let verify: @Sendable () async -> Bool = {
+                await MainActor.run {
+                    target.stillFocused(
+                        currentPID: NSWorkspace.shared.frontmostApplication?.processIdentifier
+                    )
+                }
+            }
+
             switch outcome {
             case .paste(let send):
-                await injector.paste(text, autoSend: send)
-                lastTranscript = text
-                log("pasted autoSend=\(send)")
+                let posted = await injector.paste(text, autoSend: send, verifyTarget: verify)
+                if hasText {
+                    lastTranscript = text
+                }
+                if posted {
+                    log("pasted autoSend=\(send)")
+                } else {
+                    Notifier.post(title: "Fennec", body: Self.message(for: .focusChanged))
+                    log("paste skipped: target moved during the settle window")
+                }
             case .clipboardOnly(let reason):
-                if !text.isEmpty {
+                if hasText {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(text, forType: .string)
                     lastTranscript = text

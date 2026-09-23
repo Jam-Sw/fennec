@@ -9,15 +9,21 @@ import FennecCore
 final class HotkeyTap: @unchecked Sendable {
     nonisolated(unsafe) var onEvent: (@Sendable (HotkeyStateMachine.Event) -> Void)?
 
+    private let spec: HotkeySpec
     private var tap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
-    private var optionIsDown = false
+    private var hotkeyIsDown = false
 
-    private static let rightOptionKeyCode: Int64 = 61
     private static let escapeKeyCode: Int64 = 53
 
+    init(hotkey: Hotkey) {
+        spec = HotkeySpec.spec(for: hotkey)
+    }
+
     func start() {
-        let mask = (1 << CGEventType.flagsChanged.rawValue) | (1 << CGEventType.keyDown.rawValue)
+        let mask = (1 << CGEventType.flagsChanged.rawValue)
+            | (1 << CGEventType.keyDown.rawValue)
+            | (1 << CGEventType.keyUp.rawValue)
         let callback: CGEventTapCallBack = { _, type, event, refcon in
             guard let refcon else { return Unmanaged.passUnretained(event) }
             let tap = Unmanaged<HotkeyTap>.fromOpaque(refcon).takeUnretainedValue()
@@ -47,17 +53,25 @@ final class HotkeyTap: @unchecked Sendable {
             return
         }
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-        switch type {
-        case .flagsChanged where keyCode == Self.rightOptionKeyCode:
-            let isDown = event.flags.contains(.maskAlternate)
-            if isDown, !optionIsDown {
-                optionIsDown = true
+        switch (spec.kind, type) {
+        case (.modifier(let expected, let flag), .flagsChanged) where keyCode == expected:
+            let isDown = event.flags.contains(flag)
+            if isDown, !hotkeyIsDown {
+                hotkeyIsDown = true
                 onEvent?(.startRequested)
-            } else if !isDown, optionIsDown {
-                optionIsDown = false
+            } else if !isDown, hotkeyIsDown {
+                hotkeyIsDown = false
                 onEvent?(.stopRequested(shiftHeld: event.flags.contains(.maskShift)))
             }
-        case .keyDown where keyCode == Self.escapeKeyCode:
+        case (.key(let expected), .keyDown) where keyCode == expected:
+            guard !hotkeyIsDown else { break }
+            hotkeyIsDown = true
+            onEvent?(.startRequested)
+        case (.key(let expected), .keyUp) where keyCode == expected:
+            guard hotkeyIsDown else { break }
+            hotkeyIsDown = false
+            onEvent?(.stopRequested(shiftHeld: event.flags.contains(.maskShift)))
+        case (_, .keyDown) where keyCode == Self.escapeKeyCode:
             onEvent?(.cancelRequested)
         default:
             break
