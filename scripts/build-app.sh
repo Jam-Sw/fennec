@@ -25,6 +25,11 @@ if ! security find-identity -v -p codesigning 2>/dev/null | grep -q "$IDENTITY";
   echo "==> Creating a local signing identity '$IDENTITY' (one time)"
   echo "    It lets macOS remember your permission grants across updates."
   echo "    macOS will ask for your password to trust it for code signing."
+  # Clear any untrusted copy left by an earlier attempt, or codesign sees two
+  # identities with the same name and refuses both.
+  for _ in 1 2 3 4 5; do
+    security delete-identity -c "$IDENTITY" >/dev/null 2>&1 || break
+  done
   TMP="$(mktemp -d)"
   OPENSSL=/usr/bin/openssl
   LEGACY=()
@@ -49,13 +54,21 @@ CNF
     -config "$TMP/openssl.cnf" 2>/dev/null
   "$OPENSSL" pkcs12 -export -out "$TMP/cert.p12" -inkey "$TMP/key.pem" -in "$TMP/cert.pem" \
     -passout pass:fennec "${LEGACY[@]}"
-  security import "$TMP/cert.p12" -k "$HOME/Library/Keychains/login.keychain-db" -P fennec -T /usr/bin/codesign
+  security import "$TMP/cert.p12" -k "$HOME/Library/Keychains/login.keychain-db" -P fennec -T /usr/bin/codesign || true
   security add-trusted-cert -r trustRoot -p codeSign -k "$HOME/Library/Keychains/login.keychain-db" "$TMP/cert.pem" || true
   rm -rf "$TMP"
 fi
 
+SIGN_AS="$IDENTITY"
+if ! security find-identity -v -p codesigning 2>/dev/null | grep -q "$IDENTITY"; then
+  echo "    The signing identity isn't trusted (the password prompt was probably cancelled)."
+  echo "    Signing ad hoc instead: Fennec works, but you'll grant permissions again after"
+  echo "    each update. Run the installer again to retry the identity."
+  SIGN_AS="-"
+fi
+
 echo "==> Signing"
-codesign --force --sign "$IDENTITY" --identifier "$BUNDLE_ID" --timestamp=none "$APP_DIR"
+codesign --force --sign "$SIGN_AS" --identifier "$BUNDLE_ID" --timestamp=none "$APP_DIR"
 codesign --verify "$APP_DIR"
 
 if [[ "${1:-}" == "--install" ]]; then

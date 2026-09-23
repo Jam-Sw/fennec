@@ -8,7 +8,8 @@ First public release, source-available under the PolyForm Strict License 1.0.0.
   transcript is pasted at the cursor, including terminals and TUI coding agents.
 - On-device recognition with Desert Ant Voz on the Neural Engine.
 - Spoken punctuation, filler removal, and a dev-term dictionary, all configurable.
-- One-line installer that builds from source and signs with a local identity so
+- One-line installer that installs or upgrades Apple's Command Line Tools when needed,
+  builds from source, and signs with a local identity so
   permission grants survive updates; uninstaller with `--all`.
 - Fennec the fox: app icon and a menu bar glyph that shows ready, listening, working, and
   needs-attention states. Model download progress in the menu. Launch at login.

@@ -38,16 +38,20 @@ it to `/Applications`, and opens it. Run the same command again to update.
 <details>
 <summary>What the installer does, and why it builds from source</summary>
 
-1. Checks for an Apple Silicon Mac, macOS 15 or later, and Swift 6.2+. If Apple's
-   Command Line Tools are missing, it opens their installer; run the command again when it
-   finishes. Full Xcode is not needed.
-2. Clones this repo to `~/.local/share/fennec/src` and runs `swift build -c release`.
-   The first build takes a few minutes.
-3. Creates a local code signing certificate named "Fennec Local Signing", trusted only for
+1. Checks for an Apple Silicon Mac, macOS 15 or later, 5 GB of free space, and an
+   internet connection, and says exactly what to do if one is missing.
+2. Makes sure Apple's Command Line Tools with Swift 6.2 or later are there. If they're
+   missing or too old, it installs the newest version from Apple's update server; macOS
+   asks for your login password (an administrator account is needed). Full Xcode is not
+   needed.
+3. Clones this repo to `~/.local/share/fennec/src` and runs `swift build -c release`.
+   The first build takes a few minutes. If a build fails, the log is at
+   `~/Library/Logs/Fennec/install.log`.
+4. Creates a local code signing certificate named "Fennec Local Signing", trusted only for
    code signing. macOS asks for your password once to trust it. A stable signature is what
    lets macOS remember your Microphone, Input Monitoring, and Accessibility grants when you
    update. Ad-hoc signed builds lose them on every update.
-4. Copies `Fennec.app` to `/Applications` (or `~/Applications` if that isn't writable) and
+5. Copies `Fennec.app` to `/Applications` (or `~/Applications` if that isn't writable) and
    opens it.
 
 Building on your own machine means there's no downloaded binary for Gatekeeper to
