@@ -39,3 +39,9 @@ public struct HeuristicFillerDetector: FillerDetector {
         return ranges
     }
 }
+
+public extension FillerDetector {
+    /// Optional prewarm hook. The heuristic detector has nothing to do; Uhm
+    /// downloads and loads its model here so the first dictation does not pay it.
+    func prepare() async {}
+}

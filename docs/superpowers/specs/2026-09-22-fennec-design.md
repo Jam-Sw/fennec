@@ -28,7 +28,7 @@ Fennec is a personal menu-bar app for macOS that turns speech into text in whate
 - Engine: Desert Ant Labs Voz via the desert-ant-core Swift package. Batch only, 15 second encoder windows, no partials, no microphone code. Fennec owns capture, silence trimming, and insertion.
 - Filler removal: Desert Ant Uhm when its API is usable; a pause-gated word list is the fallback and stays available as an escape hatch.
 - Injection: clipboard write plus synthetic Cmd+V. This is the only method observed to work reliably in TUI apps; synthetic typing fragments and duplicates text in Codex and Claude Code TUIs (Handy issue #692).
-- Platform: macOS 26 on Apple Silicon. Build requires Swift 6.2+ via full Xcode 26, per Desert Ant's requirements.
+- Platform: macOS 26 on Apple Silicon. Build requires Swift 6.2+; verified working with the Command Line Tools toolchain (Swift 6.3.3), so full Xcode is not needed. Tests use the swift-testing package because CLT bundles no Testing module. (Updated 2026-09-22: Xcode 26 will not be installed.)
 - License: Desert Ant's Source-Available License is free below 100k monthly active devices per model. Attribution "Powered by Desert Ant Labs" appears in About and README. Fennec is a personal tool.
 
 ## Architecture
@@ -165,7 +165,7 @@ fennec/
 
 ## Risks and validation order
 
-1. Full Xcode 26 is not installed yet. Install it, then verify desert-ant-core builds and Voz loads with a hello-world CLI run.
+1. Toolchain: confirm the Command Line Tools toolchain builds desert-ant-core and runs tests. Verified 2026-09-22: the SDK builds, the probe transcribes audio, and tests run once the swift-testing package dependency is present (CLT bundles no Testing module). Full Xcode 26 is not installed and is not required.
 2. Voz latency and behavior on short utterances, including the documented 15 second window retry behavior. Validate with fixtures before building the app shell.
 3. Uhm API usability for filler spans. If awkward, use the word-list fallback.
 4. TCC grant persistence across rebuilds with the self-signed identity.

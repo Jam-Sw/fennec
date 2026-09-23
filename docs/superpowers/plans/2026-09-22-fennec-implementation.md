@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Repo root: `~/Documents/tools/fennec`. Every command in this plan runs from there.
-- macOS 26 on Apple Silicon. Swift 6.2+ with full Xcode 26. As of 2026-09-22 Xcode is NOT installed yet, so Task 1 starts with that check.
+- macOS 26 on Apple Silicon. Swift 6.2+; the Command Line Tools toolchain (Swift 6.3.3) is enough. Full Xcode 26 is not required: the SDK builds and runs under CLT, and the test framework comes from the swift-testing package because CLT bundles no Testing or XCTest module. (Ruling, 2026-09-22: jam will not install Xcode.)
 - Desert Ant SDK: `desert-ant-core`, `.package(url: "https://github.com/Desert-Ant-Labs/desert-ant-core.git", from: "3.3.1")`. Confirm the newest tag during Task 1.
 - Everything runs on device. The only network use is the one-time model download from Hugging Face.
 - Injection is clipboard plus synthetic Cmd+V only, never synthetic typing (synthetic typing fragments in TUI apps).

@@ -26,12 +26,8 @@ Model cache after the first run: `~/Library/Caches/desert-ant-models/desert-ant-
 - Timings observed: the first probe run downloaded the model and transcribed `fixtures/hello.wav` to "Fennec dictation test. Send this to open code. New line. Done". Per-stage numbers arrive with `--timings` in Task 8.
 - Empty and silence behavior: the silence fixture check runs in Task 8 Step 7. The runtime retries windows that produce nothing, so one retry on an empty result is the app-side rule.
 
-## Uhm (evaluated in Task 9)
+## Uhm (evaluated 2026-09-22, no-go for v1)
 
-- Sources: `Sources/Uhm/` (Uhm.swift, Detector.swift, Filler.swift, Labeler.swift, WordReconciliation.swift).
-- Docs: `docs/models/uhm.md`.
-- API surface and latency get recorded here during Task 9, along with the go/no-go decision.
-
-## Toolchain note
-
-The SDK compiles and runs under the Command Line Tools toolchain (Swift 6.3.3) even though the README names Xcode 26. One transient SwiftPM "Applying" codesign failure appeared while the build state was damaged by an experiment and did not recur across clean and incremental builds. If a task hits a toolchain wall, installing Xcode 26 is the fix.
+- Public API: `Uhm()` (cheap to construct), `Uhm.Options` (`bias`, `includeTypes`, `minConfidence`, `minDurationSec`), `download(progress:)`, `analyze(samples:sampleRate:options:progressHandler:) -> Result` with `Result.fillers: [Detection{start, end, confidence, type}]`.
+- Measured on the 5.1 s fixture, steady state after a warm-up call: 143.7 ms with the type labeler, 136.3 ms without. The bar was under 50 ms per utterance. The cost is the model itself (DistilHuBERT at a 20 ms hop, roughly 27x realtime), not the labeler.
+- Decision: ship the pause-gated `HeuristicFillerDetector`. The adapter, its dependency, and the measurement test were reverted; they live in git history between commits 21ceff7 and the evaluation commit. If filler precision ever matters more than about 140 ms, flip `FillerDetectorFactory.make()` back to Uhm and re-add the product.
