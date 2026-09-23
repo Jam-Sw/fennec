@@ -19,7 +19,7 @@ let package = Package(
     platforms: [.macOS("15.0")],
     products: [
         .executable(name: "Fennec", targets: ["FennecApp"]),
-        .executable(name: "fennec", targets: ["FennecCLI"]),
+        .executable(name: "fennec-cli", targets: ["FennecCLI"]),
         .library(name: "FennecCore", targets: ["FennecCore"]),
         .library(name: "FennecEngine", targets: ["FennecEngine"]),
     ],
