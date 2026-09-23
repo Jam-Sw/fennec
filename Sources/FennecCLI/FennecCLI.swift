@@ -39,7 +39,7 @@ struct FennecCLI {
                 let loadMS = milliseconds(since: loadStart)
 
                 let transcribeStart = CFAbsoluteTimeGetCurrent()
-                let transcript = try await transcriber.transcribe(samples: samples, sampleRate: 16000)
+                let transcript = try await transcriber.transcribeWithRetry(samples: samples, sampleRate: AudioFileLoader.defaultSampleRate)
                 let transcribeMS = milliseconds(since: transcribeStart)
 
                 var text = transcript.text
@@ -59,7 +59,7 @@ struct FennecCLI {
                     }
 
                     let fillerStart = CFAbsoluteTimeGetCurrent()
-                    let spans = (try? await FillerDetectorFactory.make().fillerRanges(
+                    let spans = (try? await HeuristicFillerDetector().fillerRanges(
                         samples: samples,
                         sampleRate: 16000,
                         words: transcript.words

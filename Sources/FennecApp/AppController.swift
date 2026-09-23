@@ -9,11 +9,12 @@ final class AppController {
     private var hotkeyState = HotkeyStateMachine()
     private let transcriber = VozTranscriber()
     private let injector = Injector()
-    private let detector: any FillerDetector = FillerDetectorFactory.make()
+    private let detector = HeuristicFillerDetector()
     private let menu = MenuBar()
 
     private var tap: HotkeyTap?
-    private var recorder: Recorder?
+    private let recorder = Recorder(preRollSeconds: Config().preRollSeconds)
+    private var isRecording = false
     private var config = Config()
     private var dictionary = TermDictionary.builtIn
     private var lastTranscript = ""
@@ -21,6 +22,13 @@ final class AppController {
     private var recordingStarted: CFAbsoluteTime = 0
     private var maxDurationTask: Task<Void, Never>?
     private var engineReady = false
+    private var clipboardToken: ClipboardSnapshotToken?
+    private var lastDictationEnded: CFAbsoluteTime = 0
+
+    /// Below this gap since the last dictation, the ANE/weights are still
+    /// warm from that transcription, so a fresh warm-up pass would just add
+    /// actor-queue contention for no benefit.
+    private static let warmUpSkipWindow: CFAbsoluteTime = 30
 
     private var debugLogURL: URL {
         FileManager.default.homeDirectoryForCurrentUser
@@ -29,6 +37,10 @@ final class AppController {
 
     func start() {
         loadConfiguration()
+        recorder.onLog = { [weak self] message in
+            Task { @MainActor in self?.log(message) }
+        }
+        recorder.warmUp()
 
         menu.onCopyLastTranscript = { [weak self] in
             guard let self, !self.lastTranscript.isEmpty else { return }
@@ -40,8 +52,12 @@ final class AppController {
         menu.onReloadConfig = { [weak self] in
             guard let self else { return }
             let hotkey = self.config.hotkey
+            let preRollSeconds = self.config.preRollSeconds
             self.loadConfiguration()
             if self.config.hotkey != hotkey { self.installHotkeyTap() }
+            if self.config.preRollSeconds != preRollSeconds {
+                self.recorder.updatePreRoll(seconds: self.config.preRollSeconds)
+            }
         }
         menu.onRevealLog = { [weak self] in
             guard let self else { return }
@@ -127,16 +143,23 @@ final class AppController {
             frontmostPID: NSWorkspace.shared.frontmostApplication?.processIdentifier
         )
         recordingStarted = CFAbsoluteTimeGetCurrent()
+        clipboardToken = nil
+        Task { [weak self, injector] in
+            let token = await injector.snapshotToken()
+            self?.clipboardToken = token
+        }
         do {
-            let recorder = Recorder(preRollSeconds: config.preRollSeconds)
             try recorder.start()
-            self.recorder = recorder
+            isRecording = true
             menu.update(.listening)
             log("beginRecording")
+            if engineReady, recordingStarted - lastDictationEnded > Self.warmUpSkipWindow {
+                Task { [transcriber] in await transcriber.warmUp() }
+            }
             let maxSeconds = config.maxDurationSeconds
             maxDurationTask = Task { [weak self] in
                 try? await Task.sleep(nanoseconds: UInt64(maxSeconds * 1_000_000_000))
-                guard let self, self.recorder != nil else { return }
+                guard let self, self.isRecording else { return }
                 self.log("max duration reached")
                 await self.finishRecording(autoSend: false)
             }
@@ -147,25 +170,33 @@ final class AppController {
 
     private func cancelRecording() {
         maxDurationTask?.cancel()
-        recorder?.cancel()
-        recorder = nil
+        recorder.cancel()
+        isRecording = false
         menu.update(.idle)
         log("cancelRecording")
     }
 
     private func finishRecording(autoSend: Bool) async {
         maxDurationTask?.cancel()
-        guard let recorder else { return }
+        guard isRecording else { return }
+        isRecording = false
         let target = self.target
         let config = self.config
         let dictionary = self.dictionary
-        let raw = recorder.stop()
-        self.recorder = nil
+        let stopStart = CFAbsoluteTimeGetCurrent()
+        let raw = await recorder.stopCapture()
+        // Off the critical path: transcription starts on the samples we
+        // already have without waiting for the engine to spin down.
+        recorder.stopEngineDeferred()
         let keyUp = CFAbsoluteTimeGetCurrent()
+        lastDictationEnded = keyUp
+        log("stage stop_ms=\(Int((keyUp - stopStart) * 1000))")
         log("keyUp duration_ms=\(Int((keyUp - recordingStarted) * 1000))")
         menu.update(.working)
 
+        let trimStart = CFAbsoluteTimeGetCurrent()
         let samples = SilenceTrimmer.trim(raw, sampleRate: Recorder.sampleRate)
+        log("stage trim_ms=\(Int((CFAbsoluteTimeGetCurrent() - trimStart) * 1000))")
         guard samples.count >= Int(config.minDurationSeconds * Recorder.sampleRate) else {
             menu.update(.idle)
             log("too short")
@@ -173,7 +204,9 @@ final class AppController {
         }
 
         do {
+            let transcribeStart = CFAbsoluteTimeGetCurrent()
             let transcript = try await transcribeWithRetry(samples)
+            log("stage transcribe_ms=\(Int((CFAbsoluteTimeGetCurrent() - transcribeStart) * 1000))")
             let spans = (try? await detector.fillerRanges(
                 samples: samples,
                 sampleRate: Recorder.sampleRate,
@@ -211,7 +244,17 @@ final class AppController {
 
             switch outcome {
             case .paste(let send):
-                let posted = await injector.paste(text, autoSend: send, verifyTarget: verify)
+                let posted = await injector.paste(
+                    text,
+                    autoSend: send,
+                    verifyTarget: verify,
+                    priorSnapshot: clipboardToken,
+                    settleSeconds: config.pasteSettleSeconds,
+                    since: keyUp,
+                    onStage: { [debugLogURL, debugLogging = config.debugLogging] stage, ms in
+                        DebugLog(enabled: debugLogging, url: debugLogURL).record("stage \(stage) elapsed_ms=\(ms)")
+                    }
+                )
                 if hasText {
                     lastTranscript = text
                 }
@@ -243,12 +286,12 @@ final class AppController {
     }
 
     private func transcribeWithRetry(_ samples: [Float]) async throws -> Transcript {
-        var transcript = try await transcriber.transcribe(samples: samples, sampleRate: Recorder.sampleRate)
-        if transcript.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            log("empty transcription, retrying once")
-            transcript = try await transcriber.transcribe(samples: samples, sampleRate: Recorder.sampleRate)
+        try await transcriber.transcribeWithRetry(
+            samples: samples,
+            sampleRate: Recorder.sampleRate
+        ) { [weak self] in
+            await self?.log("empty transcription, retrying once")
         }
-        return transcript
     }
 
     private func loadConfiguration() {
