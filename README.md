@@ -5,11 +5,16 @@
 <h1 align="center">Fennec</h1>
 
 <p align="center">
-  <b>Hold a key, speak, release. Your words land wherever the cursor is, including the terminal.</b><br>
-  Push-to-talk dictation for macOS that runs entirely on your Mac.
+  <b>Fennec Is Incredibly Fast, a quick and careful listener, with big ears. Hold a key, speak, release. 
+    </b>
+  <br>
+  Your words land wherever the cursor is, including the terminal.
+  <br>
+  This is: Push-to-talk Dictation & Transcription for macOS, that never leaves your mac
 </p>
 
 <p align="center">
+  <img alt="Status: Beta" src="https://img.shields.io/badge/status-beta-yellow?style=flat-square">
   <img alt="macOS 26" src="https://img.shields.io/badge/macOS-26-1C1838?style=flat-square&logo=apple&logoColor=white">
   <img alt="Apple Silicon" src="https://img.shields.io/badge/Apple%20Silicon-required-3B2A5E?style=flat-square">
   <img alt="On device" src="https://img.shields.io/badge/speech-on%20device-E8854A?style=flat-square">
