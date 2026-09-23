@@ -1,0 +1,5 @@
+This paragraph exists to verify that a long dictation survives the transcription window.
+Fennec splits audio into fifteen second chunks, transcribes each chunk, and rejoins them
+using the words that neighboring windows agree on. If a middle window were dropped we would
+see a sudden gap here, roughly in the center of the sentence, and the final word count would
+come up short. Count the words and compare.
