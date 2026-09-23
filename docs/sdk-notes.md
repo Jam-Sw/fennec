@@ -31,3 +31,32 @@ Model cache after the first run: `~/Library/Caches/desert-ant-models/desert-ant-
 - Public API: `Uhm()` (cheap to construct), `Uhm.Options` (`bias`, `includeTypes`, `minConfidence`, `minDurationSec`), `download(progress:)`, `analyze(samples:sampleRate:options:progressHandler:) -> Result` with `Result.fillers: [Detection{start, end, confidence, type}]`.
 - Measured on the 5.1 s fixture, steady state after a warm-up call: 143.7 ms with the type labeler, 136.3 ms without. The bar was under 50 ms per utterance. The cost is the model itself (DistilHuBERT at a 20 ms hop, roughly 27x realtime), not the labeler.
 - Decision: ship the pause-gated `HeuristicFillerDetector`. The adapter, its dependency, and the measurement test were reverted; they live in git history between commits 21ceff7 and the evaluation commit. If filler precision ever matters more than about 140 ms, flip `FillerDetectorFactory.make()` back to Uhm and re-add the product.
+
+## Usage reporting
+
+Recorded 2026-09-22 from `Sources/Usage` and `Sources/Voz/UsageTracking.swift` at v3.3.0.
+
+- Every `Voz` opens a usage turnstile when the model loads and records one call per
+  transcription. A debounced flush (3 s) POSTs to `https://platform.desertant.ai/api/v1/ingest`.
+- Payload (`Usage/Wire.swift`): platform, SDK name and version, app id (the bundle id,
+  `com.jam.fennec`), a random device id persisted by the SDK, call counts, and timestamps.
+  No audio, text, or timings.
+- `DAL_USAGE_DISABLED=1` switches it off. The SDK comments say it exists for CI and
+  short-lived test processes, and that core "deliberately leaves no untracked path" for
+  shipped apps; the license meters its free tier by monthly active devices. Fennec leaves
+  reporting on and discloses it in the README.
+
+## License terms that bind Fennec
+
+Read from https://license.desertant.com/1.0.txt on 2026-09-22. Check the source before
+relying on this summary.
+
+- Paid apps may embed and ship the models. Free below 100,000 monthly active devices per
+  model per platform; above that, a commercial license. Apps under common control count
+  together.
+- Attribution: credit such as "Powered by Desert Ant Labs" with a link to
+  https://desertant.com, in an about, credits, or legal screen, or the store listing.
+  Fennec has it in the About box (with a link button) and the README.
+- The models and SDKs may not be sold or redistributed on their own.
+- Section 6: do not tamper with the usage telemetry or interfere with its reporting.
+- No restriction on how Fennec licenses its own code.

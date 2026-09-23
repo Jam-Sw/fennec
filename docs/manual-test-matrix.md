@@ -4,7 +4,7 @@ Run each row with `/Applications/Fennec.app`. Record pass or fail and any notes.
 
 | Target | Paste appears | Not auto-executed | Notes |
 | --- | --- | --- | --- |
-| TextEdit | | | |
+| TextEdit | pass | pass | 2026-09-22, synthetic Right Option plus `say` through the mic; ready 84 to 184 ms after release |
 | Terminal.app | | | |
 | tmux pane | | | |
 | VS Code integrated terminal | | | |
@@ -44,5 +44,7 @@ Expected: still works, no new permission prompts.
 ## Cancel and focus-change behaviour
 
 - Hold Right Option, speak, press Escape, release. Expected: nothing pasted.
+  2026-09-22: pass (synthetic keys; log shows `cancelRecording`, nothing pasted). Not yet
+  checked by hand: that the Escape stays out of the focused app, e.g. Claude Code.
 - Start holding in TextEdit, speak, click Terminal before releasing. Expected: no paste,
   transcript on the clipboard, and a notification.
