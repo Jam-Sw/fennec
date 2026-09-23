@@ -13,6 +13,7 @@ final class HotkeyTap: @unchecked Sendable {
     private var tap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var hotkeyIsDown = false
+    private var swallowingEscape = false
 
     private static let escapeKeyCode: Int64 = 53
 
@@ -20,37 +21,61 @@ final class HotkeyTap: @unchecked Sendable {
         spec = HotkeySpec.spec(for: hotkey)
     }
 
-    func start() {
+    /// Prefers an active tap, which can keep the cancelling Escape away from the
+    /// focused app (Escape interrupts coding agents). Active taps need
+    /// Accessibility, so falls back to listening only. Returns false when macOS
+    /// refuses both, which happens until Input Monitoring is granted.
+    @discardableResult
+    func start() -> Bool {
         let mask = (1 << CGEventType.flagsChanged.rawValue)
             | (1 << CGEventType.keyDown.rawValue)
             | (1 << CGEventType.keyUp.rawValue)
         let callback: CGEventTapCallBack = { _, type, event, refcon in
             guard let refcon else { return Unmanaged.passUnretained(event) }
             let tap = Unmanaged<HotkeyTap>.fromOpaque(refcon).takeUnretainedValue()
-            tap.handle(type: type, event: event)
-            return Unmanaged.passUnretained(event)
+            return tap.handle(type: type, event: event) ? nil : Unmanaged.passUnretained(event)
         }
-        guard let tap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .listenOnly,
-            eventsOfInterest: CGEventMask(mask),
-            callback: callback,
-            userInfo: Unmanaged.passUnretained(self).toOpaque()
-        ) else {
-            return
+        let create = { (options: CGEventTapOptions) in
+            CGEvent.tapCreate(
+                tap: .cgSessionEventTap,
+                place: .headInsertEventTap,
+                options: options,
+                eventsOfInterest: CGEventMask(mask),
+                callback: callback,
+                userInfo: Unmanaged.passUnretained(self).toOpaque()
+            )
+        }
+        guard let tap = create(.defaultTap) ?? create(.listenOnly) else {
+            return false
         }
         self.tap = tap
         let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
         runLoopSource = source
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
+        return true
     }
 
-    private func handle(type: CGEventType, event: CGEvent) {
+    func stop() {
+        if let tap {
+            CGEvent.tapEnable(tap: tap, enable: false)
+            CFMachPortInvalidate(tap)
+        }
+        if let runLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
+        }
+        tap = nil
+        runLoopSource = nil
+        hotkeyIsDown = false
+        swallowingEscape = false
+    }
+
+    /// Returns true when the event should be swallowed. Only an Escape that
+    /// cancels a dictation is; everything else passes through untouched.
+    private func handle(type: CGEventType, event: CGEvent) -> Bool {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
-            return
+            return false
         }
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         switch (spec.kind, type) {
@@ -73,8 +98,14 @@ final class HotkeyTap: @unchecked Sendable {
             onEvent?(.stopRequested(shiftHeld: event.flags.contains(.maskShift)))
         case (_, .keyDown) where keyCode == Self.escapeKeyCode:
             onEvent?(.cancelRequested)
+            swallowingEscape = hotkeyIsDown
+            return swallowingEscape
+        case (_, .keyUp) where keyCode == Self.escapeKeyCode && swallowingEscape:
+            swallowingEscape = false
+            return true
         default:
             break
         }
+        return false
     }
 }

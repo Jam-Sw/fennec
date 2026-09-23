@@ -81,3 +81,9 @@ import Testing
     let applied = DictionaryMatcher.apply(matches, to: tokens)
     #expect(applied.map(\.text) == ["Send", "opencode."])
 }
+
+@Test func builtInSurvivesSerializeAndParse() {
+    let text = TermDictionary.builtIn.serialized()
+    #expect(text.contains("kubectl = cube control, cube cuddle\n"))
+    #expect(TermDictionary.parse(text) == TermDictionary.builtIn)
+}

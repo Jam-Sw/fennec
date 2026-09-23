@@ -15,13 +15,19 @@ enum Permissions {
         }
     }
 
-    static func accessibilityGranted() -> Bool {
-        AXIsProcessTrusted()
-    }
-
     static func requestAccessibility() {
         let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
         _ = AXIsProcessTrustedWithOptions(options)
+    }
+
+    /// Whether synthetic keystrokes will reach other apps. Without this macOS
+    /// drops them silently, so check before pasting rather than after.
+    static func canPostKeys() -> Bool {
+        AXIsProcessTrusted() && CGPreflightPostEventAccess()
+    }
+
+    static func requestPostKeys() {
+        _ = CGRequestPostEventAccess()
     }
 
     static func inputMonitoringGranted() -> Bool {

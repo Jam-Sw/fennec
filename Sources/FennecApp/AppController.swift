@@ -20,6 +20,7 @@ final class AppController {
     private var target = DictationTarget.capture(frontmostPID: nil)
     private var recordingStarted: CFAbsoluteTime = 0
     private var maxDurationTask: Task<Void, Never>?
+    private var engineReady = false
 
     private var debugLogURL: URL {
         FileManager.default.homeDirectoryForCurrentUser
@@ -36,7 +37,12 @@ final class AppController {
         }
         menu.onEditDictionary = { [weak self] in self?.openDictionary() }
         menu.onEditConfig = { [weak self] in self?.openConfig() }
-        menu.onReloadConfig = { [weak self] in self?.loadConfiguration() }
+        menu.onReloadConfig = { [weak self] in
+            guard let self else { return }
+            let hotkey = self.config.hotkey
+            self.loadConfiguration()
+            if self.config.hotkey != hotkey { self.installHotkeyTap() }
+        }
         menu.onRevealLog = { [weak self] in
             guard let self else { return }
             NSWorkspace.shared.selectFile(
@@ -47,26 +53,53 @@ final class AppController {
         menu.onRequestPermissions = { [weak self] in self?.requestPermissions() }
         menu.onQuit = { NSApp.terminate(nil) }
 
-        menu.update(state: "Starting")
-        if !Permissions.accessibilityGranted() || !Permissions.inputMonitoringGranted() {
+        log(
+            "permissions microphone=\(Permissions.microphoneGranted()) accessibility=\(AXIsProcessTrusted()) "
+                + "postEvents=\(CGPreflightPostEventAccess()) inputMonitoring=\(Permissions.inputMonitoringGranted())"
+        )
+        if !Permissions.canPostKeys() || !Permissions.inputMonitoringGranted() {
             requestPermissions()
         }
-        tap = HotkeyTap(hotkey: config.hotkey)
-        tap?.onEvent = { [weak self] event in
-            Task { @MainActor in self?.handle(event) }
-        }
-        tap?.start()
+        installHotkeyTap()
 
         Task { [weak self] in
             guard let self else { return }
             do {
-                try await self.transcriber.prepare(progress: nil)
+                try await self.transcriber.prepare(progress: { [weak self] fraction in
+                    Task { @MainActor in
+                        guard let self, !self.engineReady else { return }
+                        self.menu.update(fraction < 1 ? .downloading(percent: Int(fraction * 100)) : .starting)
+                    }
+                })
+                self.engineReady = true
                 await self.detector.prepare()
                 self.log("engine ready")
-                self.menu.update(state: "Idle")
+                self.menu.update(.idle)
+                self.welcomeOnFirstRun()
             } catch {
-                self.menu.update(state: "Engine error: \(error)")
+                self.menu.update(.problem("Speech engine error: \(error)"))
             }
+        }
+    }
+
+    private func installHotkeyTap() {
+        tap?.stop()
+        let tap = HotkeyTap(hotkey: config.hotkey)
+        tap.onEvent = { [weak self] event in
+            Task { @MainActor in self?.handle(event) }
+        }
+        self.tap = tap
+        startHotkeyTap(tap)
+    }
+
+    /// The tap cannot start until Input Monitoring is granted. Retry so the
+    /// hotkey works as soon as the grant lands, without a relaunch.
+    private func startHotkeyTap(_ tap: HotkeyTap) {
+        guard tap === self.tap else { return }
+        if tap.start() { return }
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            self?.startHotkeyTap(tap)
         }
     }
 
@@ -87,7 +120,7 @@ final class AppController {
     private func beginRecording() {
         guard Permissions.microphoneGranted() else {
             Task { _ = await Permissions.requestMicrophone() }
-            menu.update(state: "Microphone permission needed")
+            menu.update(.problem("Microphone access needed. Open Permissions…"))
             return
         }
         target = DictationTarget.capture(
@@ -98,7 +131,7 @@ final class AppController {
             let recorder = Recorder(preRollSeconds: config.preRollSeconds)
             try recorder.start()
             self.recorder = recorder
-            menu.update(state: "Listening")
+            menu.update(.listening)
             log("beginRecording")
             let maxSeconds = config.maxDurationSeconds
             maxDurationTask = Task { [weak self] in
@@ -108,7 +141,7 @@ final class AppController {
                 await self.finishRecording(autoSend: false)
             }
         } catch {
-            menu.update(state: "Recorder error: \(error)")
+            menu.update(.problem("Recorder error: \(error)"))
         }
     }
 
@@ -116,7 +149,7 @@ final class AppController {
         maxDurationTask?.cancel()
         recorder?.cancel()
         recorder = nil
-        menu.update(state: "Idle")
+        menu.update(.idle)
         log("cancelRecording")
     }
 
@@ -130,11 +163,11 @@ final class AppController {
         self.recorder = nil
         let keyUp = CFAbsoluteTimeGetCurrent()
         log("keyUp duration_ms=\(Int((keyUp - recordingStarted) * 1000))")
-        menu.update(state: "Working")
+        menu.update(.working)
 
         let samples = SilenceTrimmer.trim(raw, sampleRate: Recorder.sampleRate)
         guard samples.count >= Int(config.minDurationSeconds * Recorder.sampleRate) else {
-            menu.update(state: "Idle")
+            menu.update(.idle)
             log("too short")
             return
         }
@@ -156,10 +189,15 @@ final class AppController {
 
             let hasText = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             let currentPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+            let focusChanged = !target.stillFocused(currentPID: currentPID)
+            let secureInput = IsSecureEventInputEnabled()
+            let canPostKeys = Permissions.canPostKeys()
+            log("decide focusChanged=\(focusChanged) secureInput=\(secureInput) canPostKeys=\(canPostKeys)")
             let outcome = InjectionPolicy.decide(
                 hasText: hasText,
-                focusChanged: !target.stillFocused(currentPID: currentPID),
-                secureInput: IsSecureEventInputEnabled(),
+                focusChanged: focusChanged,
+                secureInput: secureInput,
+                canPostKeys: canPostKeys,
                 autoSend: autoSend
             )
 
@@ -191,13 +229,17 @@ final class AppController {
                 }
                 Notifier.post(title: "Fennec", body: Self.message(for: reason))
                 log("clipboardOnly reason=\(reason)")
+                if reason == .notTrusted {
+                    menu.update(.problem("Accessibility access needed to paste. Open Permissions…"))
+                    return
+                }
             }
         } catch {
-            menu.update(state: "Transcribe error: \(error)")
+            menu.update(.problem("Transcription error: \(error)"))
             log("transcribe error \(error)")
             return
         }
-        menu.update(state: "Idle")
+        menu.update(.idle)
     }
 
     private func transcribeWithRetry(_ samples: [Float]) async throws -> Transcript {
@@ -215,11 +257,12 @@ final class AppController {
             config = result.config
             for warning in result.warnings { log("config warning: \(warning)") }
             dictionary = (try? TermDictionary.load(from: config.dictionaryURL)) ?? .builtIn
+            menu.hotkeyName = config.hotkey.displayName
             log("config loaded hotkey=\(config.hotkey.rawValue) autoSend=\(config.autoSend.rawValue)")
         } catch {
             config = Config()
             dictionary = .builtIn
-            menu.update(state: "Config error: \(error)")
+            menu.update(.problem("Config error: \(error)"))
         }
     }
 
@@ -237,7 +280,12 @@ final class AppController {
                 at: url.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
-            let starter = "# one entry per line: canonical = alias, alias\n"
+            let starter = """
+                # One entry per line: canonical = alias, alias
+                # Aliases are what you say; the canonical spelling is what gets typed.
+                # This file replaces the built-in list, which is copied below.
+
+                """ + TermDictionary.builtIn.serialized()
             try? starter.write(to: url, atomically: true, encoding: .utf8)
         }
         NSWorkspace.shared.open(url)
@@ -248,8 +296,9 @@ final class AppController {
             if !Permissions.microphoneGranted() {
                 _ = await Permissions.requestMicrophone()
             }
-            if !Permissions.accessibilityGranted() {
+            if !Permissions.canPostKeys() {
                 Permissions.requestAccessibility()
+                Permissions.requestPostKeys()
                 Permissions.openAccessibilitySettings()
             }
             if !Permissions.inputMonitoringGranted() {
@@ -257,6 +306,16 @@ final class AppController {
                 Permissions.openInputMonitoringSettings()
             }
         }
+    }
+
+    private func welcomeOnFirstRun() {
+        let key = "didShowWelcome"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        UserDefaults.standard.set(true, forKey: key)
+        Notifier.post(
+            title: "Fennec is ready",
+            body: "Hold \(config.hotkey.displayName), speak, and release to type."
+        )
     }
 
     private func log(_ message: String) {
@@ -271,6 +330,8 @@ final class AppController {
             return "Focus changed mid-dictation. Transcript copied to the clipboard."
         case .secureInput:
             return "Secure input is active. Transcript copied to the clipboard."
+        case .notTrusted:
+            return "Fennec needs Accessibility access to paste. Transcript copied to the clipboard; choose Permissions… in the menu."
         }
     }
 }

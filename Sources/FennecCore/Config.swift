@@ -5,6 +5,15 @@ public enum Hotkey: String, Codable, CaseIterable, Sendable {
     case rightCommand
     case fn
     case f13
+
+    public var displayName: String {
+        switch self {
+        case .rightOption: return "Right Option"
+        case .rightCommand: return "Right Command"
+        case .fn: return "Fn"
+        case .f13: return "F13"
+        }
+    }
 }
 
 public enum AutoSendMode: String, Codable, CaseIterable, Sendable {

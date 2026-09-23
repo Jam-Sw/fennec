@@ -35,6 +35,15 @@ public struct TermDictionary: Equatable, Sendable {
         return TermDictionary(entries: entries)
     }
 
+    /// The file form `parse` reads: one `canonical = alias, alias` line per entry.
+    public func serialized() -> String {
+        entries.map { entry in
+            let aliases = entry.aliases.filter { $0 != entry.canonical }
+            return aliases.isEmpty ? entry.canonical : "\(entry.canonical) = \(aliases.joined(separator: ", "))"
+        }
+        .joined(separator: "\n") + "\n"
+    }
+
     public static func load(from url: URL) throws -> TermDictionary {
         guard FileManager.default.fileExists(atPath: url.path) else { return .builtIn }
         return parse(try String(contentsOf: url, encoding: .utf8))

@@ -1,4 +1,5 @@
 import AppKit
+import Carbon
 import CoreGraphics
 import Foundation
 
@@ -36,7 +37,7 @@ public actor Injector {
         if let verifyTarget, await verifyTarget() == false {
             return false
         }
-        postKey(9, .maskCommand)
+        postKey(await MainActor.run { Self.pasteKeyCode() }, .maskCommand)
         if autoSend {
             try? await Task.sleep(nanoseconds: 150_000_000)
             if let verifyTarget, await verifyTarget() == false {
@@ -47,6 +48,38 @@ public actor Injector {
         try? await Task.sleep(nanoseconds: 150_000_000)
         ClipboardTransaction.restore(write, to: pasteboard)
         return true
+    }
+
+    /// The key that gives "v" with Command held in the current keyboard layout,
+    /// so the paste shortcut is right on Dvorak, AZERTY, and similar layouts.
+    /// Falls back to the ANSI V position.
+    @MainActor
+    public static func pasteKeyCode() -> CGKeyCode {
+        let ansiV: CGKeyCode = 9
+        guard let source = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
+              let pointer = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData) else {
+            return ansiV
+        }
+        let data = Unmanaged<CFData>.fromOpaque(pointer).takeUnretainedValue() as Data
+        return data.withUnsafeBytes { raw in
+            guard let layout = raw.baseAddress?.assumingMemoryBound(to: UCKeyboardLayout.self) else {
+                return ansiV
+            }
+            let commandState = UInt32((cmdKey >> 8) & 0xFF)
+            for code in UInt16(0) ..< 128 {
+                var deadKeyState: UInt32 = 0
+                var length = 0
+                var characters = [UniChar](repeating: 0, count: 4)
+                let status = UCKeyTranslate(
+                    layout, code, UInt16(kUCKeyActionDown), commandState, UInt32(LMGetKbdType()),
+                    OptionBits(kUCKeyTranslateNoDeadKeysBit), &deadKeyState, characters.count, &length, &characters
+                )
+                if status == noErr, length == 1, characters[0] == UniChar(118) {
+                    return CGKeyCode(code)
+                }
+            }
+            return ansiV
+        }
     }
 
     public static func postToSystem(keyCode: CGKeyCode, flags: CGEventFlags) {
