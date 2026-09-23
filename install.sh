@@ -4,8 +4,10 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/Jam-Sw/fennec/main/install.sh | zsh
 #
-# Installs or upgrades Apple's Command Line Tools when needed (asks for your
-# password). Run it again to update. Environment overrides:
+# Installs or upgrades Apple's Command Line Tools when needed, repairs a known
+# Command Line Tools packaging bug that stops Swift from loading any package
+# manifest (both ask for your password), and builds Fennec. Run it again to
+# update. Environment overrides:
 #   FENNEC_REF         branch or tag to install (default: main)
 #   FENNEC_SRC         where the source checkout lives (default: ~/.local/share/fennec/src)
 #   FENNEC_CHECK_ONLY  set to 1 to run the checks, report the toolchain, and stop
@@ -41,16 +43,21 @@ fail() {
   exit 1
 }
 
-# The Swift version (e.g. 6.2) of a developer directory, or nothing. Calls the
-# swift binary directly: on a Mac without developer tools, xcrun and git are
-# stubs that pop up an install dialog.
-swift_version() {
-  local dir="$1" swift
+# The swift binary of a developer directory. Called directly: on a Mac without
+# developer tools, xcrun and git are stubs that pop up an install dialog.
+swift_binary() {
+  local dir="$1"
   if [[ "$dir" == "$CLT_DIR" ]]; then
-    swift="$dir/usr/bin/swift"
+    print -r -- "$dir/usr/bin/swift"
   else
-    swift="$dir/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift"
+    print -r -- "$dir/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift"
   fi
+}
+
+# The Swift version (e.g. 6.2) of a developer directory, or nothing.
+swift_version() {
+  local swift
+  swift="$(swift_binary "$1")"
   [[ -x "$swift" ]] || return 0
   "$swift" --version 2>/dev/null | sed -n 's/.*Swift version \([0-9]*\.[0-9]*\).*/\1/p' | head -1
 }
@@ -62,22 +69,70 @@ swift_is_new_enough() {
   (( major > 6 || (major == 6 && minor >= 2) ))
 }
 
-# Prints the first developer directory whose Swift is 6.2 or later. Prefers the
+# Prints every developer directory worth trying, most preferred first: the
 # Command Line Tools, then the selected developer directory, then any Xcode.
-find_toolchain() {
-  local candidates=("$CLT_DIR")
-  local selected
+toolchain_candidates() {
+  local selected app
+  print -r -- "$CLT_DIR"
   selected="$(xcode-select -p 2>/dev/null || true)"
-  [[ -n "$selected" ]] && candidates+=("$selected")
-  candidates+=(/Applications/Xcode*.app/Contents/Developer(N))
+  [[ -n "$selected" && "$selected" != "$CLT_DIR" ]] && print -r -- "$selected"
+  for app in /Applications/Xcode*.app/Contents/Developer(N); do
+    [[ "$app" != "$selected" ]] && print -r -- "$app"
+  done
+  return 0
+}
+
+# Prints the first developer directory whose Swift is 6.2 or later.
+find_toolchain() {
   local dir
-  for dir in "${candidates[@]}"; do
+  for dir in ${(f)"$(toolchain_candidates)"}; do
     if swift_is_new_enough "$(swift_version "$dir")"; then
       print -r -- "$dir"
       return 0
     fi
   done
   return 1
+}
+
+# The PackageDescription module of a developer directory - the files Swift
+# reads to compile every Package.swift.
+manifest_module_dir() {
+  local dir="$1"
+  if [[ "$dir" == "$CLT_DIR" ]]; then
+    print -r -- "$dir/usr/lib/swift/pm/ManifestAPI/PackageDescription.swiftmodule"
+  else
+    print -r -- "$dir/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/pm/ManifestAPI/PackageDescription.swiftmodule"
+  fi
+}
+
+# True when this toolchain can compile and link a package manifest at all.
+# Every build starts with one, so this catches a broken toolchain early. The
+# last run's output is left in FENNEC_PROBE_OUT.
+manifest_probe() {
+  local dir="$1" probe rc=0
+  probe="$(mktemp -d "${TMPDIR:-/tmp}/fennec-manifest.XXXXXX")"
+  print -r -- '// swift-tools-version: 6.2
+import PackageDescription
+
+let package = Package(name: "fennec-manifest-probe")' > "$probe/Package.swift"
+  FENNEC_PROBE_OUT="$( cd "$probe" && "$(swift_binary "$dir")" package dump-package 2>&1 )" || rc=$?
+  rm -rf "$probe"
+  return $rc
+}
+
+# Some Command Line Tools installs carry a stale second copy of the module's
+# interface (…private.swiftinterface) left over from an older toolchain. Swift
+# reads the stale copy, binds every manifest to a Package initializer the
+# library no longer exports, and builds die with "Invalid manifest" and an
+# undefined swiftLanguageVersions symbol. Moving the stale files aside is
+# Apple's own workaround; nothing reads them once renamed. Requires sudo.
+disable_stale_manifest_interfaces() {
+  local module_dir="$1" f moved=0
+  for f in "$module_dir"/*.private.swiftinterface(N); do
+    sudo mv "$f" "${f}.disabled-by-fennec" || return 1
+    moved=1
+  done
+  (( moved ))
 }
 
 # Picks the newest Command Line Tools label from `softwareupdate --list` output
@@ -127,6 +182,22 @@ install_command_line_tools() {
   rm -f "$CLT_ON_DEMAND"
 }
 
+# Prints a plain-language hint when the build log matches a known, fixable
+# failure, so a failed install ends in something better than compiler noise.
+explain_build_failure() {
+  local log="$1"
+  [[ -f "$log" ]] || return 0
+  if grep -q 'swiftLanguageVersions' "$log" 2>/dev/null; then
+    printf '    %sThe log shows Apple'"'"'s Command Line Tools manifest bug. Installing Xcode from the App Store fixes it; the installer will then use Xcode.%s\n' "$DIM" "$RESET" >&2
+  fi
+  if grep -qE 'Could not resolve|failed to clone|unable to access|Authentication failed' "$log" 2>/dev/null; then
+    printf '    %sFennec could not download its speech SDK (github.com/Desert-Ant-Labs/desert-ant-core). Check the internet connection, then run the installer again.%s\n' "$DIM" "$RESET" >&2
+  fi
+  if grep -q 'No space left' "$log" 2>/dev/null; then
+    printf '    %sThe disk filled up during the build. Free some space, then run the installer again.%s\n' "$DIM" "$RESET" >&2
+  fi
+}
+
 build_and_install() {
   local root="$1" attempt
   mkdir -p "${LOG:h}"
@@ -140,6 +211,7 @@ build_and_install() {
       step "The build hit a snag; trying once more"
     fi
   done
+  explain_build_failure "$LOG"
   printf '\n%sLast lines of the build log:%s\n' "$DIM" "$RESET" >&2
   tail -15 "$LOG" >&2
   fail "the build failed twice. The full log is at $LOG; please attach it to an issue."
@@ -149,6 +221,7 @@ build_and_install() {
 main() {
   printf '\n%s  /\\_/\\   Fennec%s\n' "$ACCENT" "$RESET"
   printf '%s ( o.o )  %shold a key, speak, release%s\n\n' "$ACCENT" "$DIM" "$RESET"
+  note "Developer beta: Fennec is compiled from source on your Mac, so rough edges are expected."
 
   step "Checking this Mac"
   [[ "$(uname -s)" == Darwin ]] || fail "Fennec runs on macOS only."
@@ -181,6 +254,61 @@ main() {
   fi
   export DEVELOPER_DIR="$developer_dir"
   note "Swift $(swift_version "$developer_dir") from $developer_dir"
+
+  step "Checking that Swift can load packages"
+  local manifest_ok=0 module_dir manual_hint=""
+  local -a stale
+  if manifest_probe "$developer_dir"; then
+    manifest_ok=1
+  else
+    note "Swift can't load a package manifest on this Mac, so every build here would fail."
+    module_dir="$(manifest_module_dir "$developer_dir")"
+    stale=( "$module_dir"/*.private.swiftinterface(N) )
+    if [[ "$developer_dir" == "$CLT_DIR" ]] && (( ${#stale} > 0 )); then
+      note "A leftover file from an older Command Line Tools is the cause - a known Apple bug."
+      note "The installer can move it aside. macOS will ask for the password you use to log in."
+      if sudo -v && disable_stale_manifest_interfaces "$module_dir" && manifest_probe "$developer_dir"; then
+        manifest_ok=1
+        note "Repaired. The leftovers stay next to the originals with a .disabled-by-fennec suffix."
+      else
+        note "The repair didn't go through - no administrator access, most likely."
+      fi
+    fi
+    if (( ! manifest_ok )); then
+      local alt
+      for alt in ${(f)"$(toolchain_candidates)"}; do
+        [[ "$alt" == "$developer_dir" ]] && continue
+        swift_is_new_enough "$(swift_version "$alt")" || continue
+        if manifest_probe "$alt"; then
+          developer_dir="$alt"
+          export DEVELOPER_DIR="$developer_dir"
+          manifest_ok=1
+          note "Using the working developer tools at $developer_dir instead."
+          break
+        fi
+      done
+    fi
+    if (( ! manifest_ok )); then
+      mkdir -p "${LOG:h}"
+      {
+        printf 'Swift could not load a package manifest with %s:\n' "$developer_dir"
+        print -r -- "$FENNEC_PROBE_OUT"
+      } > "$LOG"
+      if (( ${#stale} > 0 )); then
+        manual_hint="
+  2. Or move the leftover files aside by hand, then run the installer again:
+     sudo mv \"$module_dir\"/*.private.swiftinterface ~/Desktop/"
+      else
+        manual_hint="
+  2. Or reinstall Apple's Command Line Tools in System Settings → General → Software Update, then run the installer again."
+      fi
+      fail "Swift can't load any package manifest with Apple's developer tools on this Mac, which stops the build. The Command Line Tools look damaged - a known Apple packaging bug.
+  1. Install Apple's full Xcode from the App Store, then run the installer again:
+     https://apps.apple.com/app/xcode/id497799835$manual_hint
+
+  The full error is in $LOG."
+    fi
+  fi
 
   if [[ "${FENNEC_CHECK_ONLY:-}" == 1 ]]; then
     step "Checks passed; stopping because FENNEC_CHECK_ONLY=1"
@@ -230,6 +358,9 @@ ${ACCENT}Fennec is running.${RESET} Look for the fox in your menu bar.
   2. The first launch downloads the speech model once (about 470 MB).
      The menu shows progress; the fox turns solid when it's ready.
   3. Click into any text field or terminal, hold ${BOLD}Right Option${RESET}, speak, and release.
+
+  You're on the developer beta build. If anything misbehaves, please say so:
+  ${ISSUES}
 
   Config:     ~/.config/fennec/config.json
   Update:     run this installer again
