@@ -6,6 +6,23 @@ public enum AudioFileLoaderError: Error {
     case conversionFailed
 }
 
+private final class OneShotAudioInput: @unchecked Sendable {
+    private let lock = NSLock()
+    private var buffer: AVAudioPCMBuffer?
+
+    init(_ buffer: AVAudioPCMBuffer) {
+        self.buffer = buffer
+    }
+
+    func take() -> AVAudioPCMBuffer? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let buffer else { return nil }
+        self.buffer = nil
+        return buffer
+    }
+}
+
 public enum AudioFileLoader {
     public static let defaultSampleRate: Double = 16000
 
@@ -39,7 +56,7 @@ public enum AudioFileLoader {
             throw AudioFileLoaderError.conversionFailed
         }
         var samples: [Float] = []
-        var suppliedInput = false
+        let oneShotInput = OneShotAudioInput(inputBuffer)
         while true {
             guard let outputBuffer = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: 8192) else {
                 throw AudioFileLoaderError.conversionFailed
@@ -47,13 +64,12 @@ public enum AudioFileLoader {
 
             var conversionError: NSError?
             let status = converter.convert(to: outputBuffer, error: &conversionError) { _, inputStatus in
-                guard !suppliedInput else {
+                guard let input = oneShotInput.take() else {
                     inputStatus.pointee = .endOfStream
                     return nil
                 }
-                suppliedInput = true
                 inputStatus.pointee = .haveData
-                return inputBuffer
+                return input
             }
 
             if status == .error {

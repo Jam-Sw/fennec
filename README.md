@@ -41,7 +41,7 @@ That's the whole setup. The installer checks your Mac, builds Fennec from source
 it to `/Applications`, and opens it. Run the same command again to update.
 
 <details>
-<summary>What the installer does, and why it builds from source</summary>
+<summary>Installer</summary>
 
 1. Checks for an Apple Silicon Mac, macOS 15 or later, 5 GB of free space, and an
    internet connection, and says exactly what to do if one is missing.
@@ -59,9 +59,9 @@ it to `/Applications`, and opens it. Run the same command again to update.
 5. Copies `Fennec.app` to `/Applications` (or `~/Applications` if that isn't writable) and
    opens it.
 
-Building on your own machine means there's no downloaded binary for Gatekeeper to
-quarantine, and you can read every line of what you're running first. Prefer to read the
-script before running it? `curl -fsSL https://raw.githubusercontent.com/Jam-Sw/fennec/main/install.sh | less`
+Prefer to read the script before running it? 
+<br/>
+`curl -fsSL https://raw.githubusercontent.com/Jam-Sw/fennec/main/install.sh | less`
 
 </details>
 
@@ -209,7 +209,7 @@ swift test                          # unit tests
 There's also a command line tool for transcribing files:
 
 ```bash
-swift run -c release fennec transcribe recording.wav --cleanup
+swift run -c release fennec-cli transcribe recording.wav --cleanup
 ```
 
 Code map: `FennecCore` holds the pure logic (text pipeline, dictionary, config, hotkey

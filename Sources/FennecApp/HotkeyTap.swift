@@ -1,11 +1,8 @@
 import CoreGraphics
 import FennecCore
 
-/// Session-level event tap for push-to-talk.
-///
-/// The tap source runs on the main run loop, so every callback and every
-/// mutation of this object's state happens on the main thread. `@unchecked
-/// Sendable` records that, because the compiler cannot see it.
+/// event tap for push-to-talk.
+
 final class HotkeyTap: @unchecked Sendable {
     nonisolated(unsafe) var onEvent: (@Sendable (HotkeyStateMachine.Event) -> Void)?
 
@@ -21,10 +18,6 @@ final class HotkeyTap: @unchecked Sendable {
         spec = HotkeySpec.spec(for: hotkey)
     }
 
-    /// Prefers an active tap, which can keep the cancelling Escape away from the
-    /// focused app (Escape interrupts coding agents). Active taps need
-    /// Accessibility, so falls back to listening only. Returns false when macOS
-    /// refuses both, which happens until Input Monitoring is granted.
     @discardableResult
     func start() -> Bool {
         let mask = (1 << CGEventType.flagsChanged.rawValue)
@@ -70,8 +63,6 @@ final class HotkeyTap: @unchecked Sendable {
         swallowingEscape = false
     }
 
-    /// Returns true when the event should be swallowed. Only an Escape that
-    /// cancels a dictation is; everything else passes through untouched.
     private func handle(type: CGEventType, event: CGEvent) -> Bool {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }

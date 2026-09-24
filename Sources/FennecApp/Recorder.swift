@@ -7,6 +7,23 @@ enum RecorderError: Error {
     case formatUnavailable
 }
 
+private final class OneShotAudioInput: @unchecked Sendable {
+    private let lock = NSLock()
+    private var buffer: AVAudioPCMBuffer?
+
+    init(_ buffer: AVAudioPCMBuffer) {
+        self.buffer = buffer
+    }
+
+    func take() -> AVAudioPCMBuffer? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let buffer else { return nil }
+        self.buffer = nil
+        return buffer
+    }
+}
+
 /// Owns one `AVAudioEngine` for the app's lifetime instead of building a new
 /// one per dictation, so `beginRecording` only ever pays for `engine.start()`
 /// - device/route resolution happened once, at `warmUp()`.
@@ -127,6 +144,14 @@ final class Recorder: @unchecked Sendable {
         return drainSamples()
     }
 
+    /// A copy of everything captured so far, leaving capture running. Live
+    /// typing transcribes these while the hotkey is still held.
+    func snapshot() -> [Float] {
+        lock.lock()
+        defer { lock.unlock() }
+        return samples
+    }
+
     /// NSLock's `lock()`/`unlock()` can't be called directly from an `async`
     /// function body, so the critical section lives in this synchronous
     /// helper instead.
@@ -146,15 +171,14 @@ final class Recorder: @unchecked Sendable {
             return
         }
         var error: NSError?
-        var supplied = false
+        let oneShotInput = OneShotAudioInput(buffer)
         converter.convert(to: converted, error: &error) { _, status in
-            if supplied {
+            guard let input = oneShotInput.take() else {
                 status.pointee = .noDataNow
                 return nil
             }
-            supplied = true
             status.pointee = .haveData
-            return buffer
+            return input
         }
         guard error == nil, let channel = converted.floatChannelData?[0] else { return }
         let chunk = Array(UnsafeBufferPointer(start: channel, count: Int(converted.frameLength)))

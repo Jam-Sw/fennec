@@ -53,6 +53,7 @@ final class MenuBar: NSObject {
 
     override init() {
         super.init()
+        statusItem.autosaveName = "FennecStatusItem"
         let menu = NSMenu()
         menu.delegate = self
         statusMenuItem.isEnabled = false
@@ -84,6 +85,7 @@ final class MenuBar: NSObject {
         self.status = status
         statusMenuItem.title = status.title
         statusItem.button?.toolTip = "Fennec: \(status.title)"
+        statusItem.button?.setAccessibilityLabel("Fennec: \(status.title)")
         if glyphChanged {
             statusItem.button?.image = MenuBarGlyph.image(status.glyph)
         }
@@ -115,23 +117,33 @@ final class MenuBar: NSObject {
             let alert = NSAlert()
             alert.messageText = "Couldn't change Launch at login"
             alert.informativeText = error.localizedDescription
+            alert.window.preventsApplicationTerminationWhenModal = false
             alert.runModal()
         }
     }
 
     @objc private func about() {
         NSApp.activate()
+        
         let alert = NSAlert()
-        alert.messageText = "Fennec \(fennecVersion)"
-        alert.informativeText = """
-            On-device push-to-talk dictation. Hold \(hotkeyName), speak, release.
+        alert.alertStyle = .informational
+        if let icon = NSApp.applicationIconImage {
+            alert.icon = icon
+        }
+        alert.messageText = "Fennec"
+        alert.informativeText = String(localized: """
+            Activate with \(hotkeyName), speak, release.
 
             Speech recognition powered by Desert Ant Labs.
-            Copyright © 2026 Jam-Sw. Source-available under the PolyForm Strict License.
-            """
-        alert.addButton(withTitle: "OK")
-        alert.addButton(withTitle: "Desert Ant Labs")
-        if alert.runModal() == .alertSecondButtonReturn, let url = URL(string: "https://desertant.com") {
+            Copyright © 2026 Jam-Sw.
+
+            V \(fennecVersion)
+            """)
+        alert.addButton(withTitle: String(localized: "OK"))
+        alert.addButton(withTitle: String(localized: "Source"))
+        alert.window.preventsApplicationTerminationWhenModal = false
+
+        if alert.runModal() == .alertSecondButtonReturn, let url = URL(string: "https://github.com/Jam-Sw/fennec/blob/main/README.md") {
             NSWorkspace.shared.open(url)
         }
     }

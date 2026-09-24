@@ -69,6 +69,38 @@ public actor Injector {
         return true
     }
 
+    /// Types text as keystrokes carrying Unicode strings, leaving the
+    /// clipboard alone. Live typing sends many small pieces, and a clipboard
+    /// round-trip for each would be slow and would race the user's own copies.
+    /// The modifier flags are cleared so the held hotkey does not turn the
+    /// letters into Option-characters.
+    public static func typeToSystem(_ text: String) {
+        guard let source = CGEventSource(stateID: .privateState) else { return }
+        let units = Array(text.utf16)
+        // Events carry at most 20 UTF-16 units; longer strings are truncated.
+        var index = 0
+        while index < units.count {
+            var end = min(index + 20, units.count)
+            // Keep a surrogate pair together.
+            if end < units.count, UTF16.isLeadSurrogate(units[end - 1]) { end -= 1 }
+            var chunk = Array(units[index ..< end])
+            let down = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true)
+            let up = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
+            down?.flags = []
+            up?.flags = []
+            down?.keyboardSetUnicodeString(stringLength: chunk.count, unicodeString: &chunk)
+            up?.keyboardSetUnicodeString(stringLength: chunk.count, unicodeString: &chunk)
+            down?.post(tap: .cghidEventTap)
+            up?.post(tap: .cghidEventTap)
+            index = end
+        }
+    }
+
+    /// Posts Return, for auto-send after live typing.
+    public func pressReturn() {
+        postKey(36, [])
+    }
+
     /// Caches `pasteKeyCode()` so a paste doesn't pay for a 128-code
     /// `UCKeyTranslate` scan every time; invalidated when the keyboard input
     /// source changes.

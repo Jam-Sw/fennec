@@ -34,6 +34,7 @@ public struct Config: Codable, Equatable, Sendable {
     public var pasteSettleSeconds: Double = 0.02
     public var dictionaryPath: String = "~/.config/fennec/dictionary.txt"
     public var debugLogging: Bool = false
+    public var liveTyping: Bool = false
     public var punctuationCommands: [String: String] = [:]
 
     public static let `default` = Config()
@@ -98,6 +99,7 @@ public struct Config: Codable, Equatable, Sendable {
         if let value = raw.pasteSettleSeconds { config.pasteSettleSeconds = value }
         if let value = raw.dictionaryPath { config.dictionaryPath = value }
         if let value = raw.debugLogging { config.debugLogging = value }
+        if let value = raw.liveTyping { config.liveTyping = value }
         if let value = raw.punctuationCommands { config.punctuationCommands = value }
 
         return (config, warnings)
@@ -115,6 +117,7 @@ public struct Config: Codable, Equatable, Sendable {
         var pasteSettleSeconds: Double?
         var dictionaryPath: String?
         var debugLogging: Bool?
+        var liveTyping: Bool?
         var punctuationCommands: [String: String]?
     }
 }
