@@ -39,6 +39,47 @@ private func testPasteboard() -> NSPasteboard {
     #expect(pasteboard.string(forType: .string) == "user copied this")
 }
 
+@Test func writeReusesAPriorSnapshotWhenChangeCountIsUnchanged() {
+    let pasteboard = testPasteboard()
+    pasteboard.clearContents()
+    let priorItem = NSPasteboardItem()
+    priorItem.setString("prior", forType: .string)
+    pasteboard.writeObjects([priorItem])
+
+    // Taken at key-down, before anything else touches the pasteboard.
+    let token = ClipboardTransaction.snapshotToken(pasteboard)
+    #expect(token.changeCount == pasteboard.changeCount)
+
+    let write = ClipboardTransaction.write("dictated", to: pasteboard, priorSnapshot: token)
+    #expect(write.snapshot == token.snapshot)
+}
+
+@Test func writeRecapturesWhenThePriorSnapshotIsStale() {
+    let pasteboard = testPasteboard()
+    pasteboard.clearContents()
+    let priorItem = NSPasteboardItem()
+    priorItem.setString("prior", forType: .string)
+    pasteboard.writeObjects([priorItem])
+
+    let staleToken = ClipboardTransaction.snapshotToken(pasteboard)
+
+    // Something else writes to the pasteboard after the token was taken
+    // (e.g. the user copied something else while still speaking). This
+    // moves changeCount, so the stale token must not be trusted.
+    pasteboard.clearContents()
+    let newerItem = NSPasteboardItem()
+    newerItem.setString("newer", forType: .string)
+    pasteboard.writeObjects([newerItem])
+    #expect(pasteboard.changeCount != staleToken.changeCount)
+
+    let write = ClipboardTransaction.write("dictated", to: pasteboard, priorSnapshot: staleToken)
+    #expect(write.snapshot != staleToken.snapshot)
+
+    let restored = ClipboardTransaction.restore(write, to: pasteboard)
+    #expect(restored)
+    #expect(pasteboard.string(forType: .string) == "newer")
+}
+
 @Test func restoreClearsWhenThereWasNothingBefore() {
     let pasteboard = testPasteboard()
     pasteboard.clearContents()

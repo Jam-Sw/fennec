@@ -9,11 +9,12 @@ final class AppController {
     private var hotkeyState = HotkeyStateMachine()
     private let transcriber = VozTranscriber()
     private let injector = Injector()
-    private let detector: any FillerDetector = FillerDetectorFactory.make()
+    private let detector = HeuristicFillerDetector()
     private let menu = MenuBar()
 
     private var tap: HotkeyTap?
-    private var recorder: Recorder?
+    private let recorder = Recorder(preRollSeconds: Config().preRollSeconds)
+    private var isRecording = false
     private var config = Config()
     private var dictionary = TermDictionary.builtIn
     private var lastTranscript = ""
@@ -21,6 +22,20 @@ final class AppController {
     private var recordingStarted: CFAbsoluteTime = 0
     private var maxDurationTask: Task<Void, Never>?
     private var engineReady = false
+    private var clipboardToken: ClipboardSnapshotToken?
+    private var lastDictationEnded: CFAbsoluteTime = 0
+    private var liveTask: Task<Void, Never>?
+    private var live = LiveCommitter()
+    private var liveTyped = ""
+    private var liveBlocked = false
+
+    /// How often live typing re-transcribes the recording so far.
+    private static let livePassInterval: UInt64 = 600_000_000
+
+    /// Below this gap since the last dictation, the ANE/weights are still
+    /// warm from that transcription, so a fresh warm-up pass would just add
+    /// actor-queue contention for no benefit.
+    private static let warmUpSkipWindow: CFAbsoluteTime = 30
 
     private var debugLogURL: URL {
         FileManager.default.homeDirectoryForCurrentUser
@@ -29,7 +44,20 @@ final class AppController {
 
     func start() {
         loadConfiguration()
+        recorder.onLog = { [weak self] message in
+            Task { @MainActor in self?.log(message) }
+        }
+        // Deferred to the next run-loop turn: `start()` runs before
+        // `NSApplication.run()` (see FennecApp.main()), and resolving the
+        // default input device in warmUp() wants the run loop already pumping.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, Permissions.microphoneGranted() else { return }
+            self.recorder.warmUp()
+        }
 
+        menu.waveformModel.fetchAudio = { [weak recorder] in
+            recorder?.recentSamples(count: 1024) ?? []
+        }
         menu.onCopyLastTranscript = { [weak self] in
             guard let self, !self.lastTranscript.isEmpty else { return }
             NSPasteboard.general.clearContents()
@@ -40,8 +68,24 @@ final class AppController {
         menu.onReloadConfig = { [weak self] in
             guard let self else { return }
             let hotkey = self.config.hotkey
+            let preRollSeconds = self.config.preRollSeconds
             self.loadConfiguration()
             if self.config.hotkey != hotkey { self.installHotkeyTap() }
+            if self.config.preRollSeconds != preRollSeconds {
+                self.recorder.updatePreRoll(seconds: self.config.preRollSeconds)
+            }
+        }
+        menu.onToggleLiveTyping = { [weak self] in
+            guard let self else { return }
+            self.config.liveTyping.toggle()
+            do {
+                try Config.write(self.config, to: Config.defaultConfigURL)
+            } catch {
+                self.config.liveTyping.toggle()
+                self.menu.update(.problem("Config error: \(error)"))
+            }
+            self.menu.liveTypingEnabled = self.config.liveTyping
+            self.log("liveTyping=\(self.config.liveTyping)")
         }
         menu.onRevealLog = { [weak self] in
             guard let self else { return }
@@ -91,9 +135,6 @@ final class AppController {
         self.tap = tap
         startHotkeyTap(tap)
     }
-
-    /// The tap cannot start until Input Monitoring is granted. Retry so the
-    /// hotkey works as soon as the grant lands, without a relaunch.
     private func startHotkeyTap(_ tap: HotkeyTap) {
         guard tap === self.tap else { return }
         if tap.start() { return }
@@ -127,16 +168,24 @@ final class AppController {
             frontmostPID: NSWorkspace.shared.frontmostApplication?.processIdentifier
         )
         recordingStarted = CFAbsoluteTimeGetCurrent()
+        clipboardToken = nil
+        Task { [weak self, injector] in
+            let token = await injector.snapshotToken()
+            self?.clipboardToken = token
+        }
         do {
-            let recorder = Recorder(preRollSeconds: config.preRollSeconds)
             try recorder.start()
-            self.recorder = recorder
+            isRecording = true
             menu.update(.listening)
             log("beginRecording")
+            if engineReady, recordingStarted - lastDictationEnded > Self.warmUpSkipWindow {
+                Task { [transcriber] in await transcriber.warmUp() }
+            }
+            if config.liveTyping, engineReady { startLiveTyping() }
             let maxSeconds = config.maxDurationSeconds
             maxDurationTask = Task { [weak self] in
                 try? await Task.sleep(nanoseconds: UInt64(maxSeconds * 1_000_000_000))
-                guard let self, self.recorder != nil else { return }
+                guard let self, self.isRecording else { return }
                 self.log("max duration reached")
                 await self.finishRecording(autoSend: false)
             }
@@ -147,45 +196,91 @@ final class AppController {
 
     private func cancelRecording() {
         maxDurationTask?.cancel()
-        recorder?.cancel()
-        recorder = nil
+        liveTask?.cancel()
+        liveTask = nil
+        recorder.cancel()
+        isRecording = false
         menu.update(.idle)
         log("cancelRecording")
     }
 
     private func finishRecording(autoSend: Bool) async {
         maxDurationTask?.cancel()
-        guard let recorder else { return }
+        guard isRecording else { return }
+        isRecording = false
         let target = self.target
         let config = self.config
         let dictionary = self.dictionary
-        let raw = recorder.stop()
-        self.recorder = nil
+        let stopStart = CFAbsoluteTimeGetCurrent()
+        let liveTask = self.liveTask
+        self.liveTask = nil
+        liveTask?.cancel()
+        let raw = await recorder.stopCapture()
+        recorder.stopEngineDeferred()
         let keyUp = CFAbsoluteTimeGetCurrent()
+        lastDictationEnded = keyUp
+        log("stage stop_ms=\(Int((keyUp - stopStart) * 1000))")
         log("keyUp duration_ms=\(Int((keyUp - recordingStarted) * 1000))")
         menu.update(.working)
 
-        let samples = SilenceTrimmer.trim(raw, sampleRate: Recorder.sampleRate)
-        guard samples.count >= Int(config.minDurationSeconds * Recorder.sampleRate) else {
+        await liveTask?.value
+        let liveWasTyping = !liveTyped.isEmpty
+
+        let trimStart = CFAbsoluteTimeGetCurrent()
+        let samples = liveWasTyping ? raw : SilenceTrimmer.trim(raw, sampleRate: Recorder.sampleRate)
+        log("stage trim_ms=\(Int((CFAbsoluteTimeGetCurrent() - trimStart) * 1000))")
+        guard liveWasTyping || samples.count >= Int(config.minDurationSeconds * Recorder.sampleRate) else {
             menu.update(.idle)
             log("too short")
             return
         }
 
         do {
+            let transcribeStart = CFAbsoluteTimeGetCurrent()
             let transcript = try await transcribeWithRetry(samples)
-            let spans = (try? await detector.fillerRanges(
+            log("stage transcribe_ms=\(Int((CFAbsoluteTimeGetCurrent() - transcribeStart) * 1000))")
+            let words = liveWasTyping ? live.finalWords(from: transcript.words) : transcript.words
+            var spans = (try? await detector.fillerRanges(
                 samples: samples,
                 sampleRate: Recorder.sampleRate,
-                words: transcript.words
+                words: words
             )) ?? []
-            let text = TextPipeline.process(
-                words: transcript.words,
+            if liveWasTyping {
+                let committedEnd = live.committedEnd
+                spans = spans.filter { $0.lowerBound >= committedEnd }
+            }
+            let full = TextPipeline.process(
+                words: words,
                 config: .from(config),
                 dictionary: dictionary,
                 fillerSpans: spans
             )
             log("ready total_ms=\(Int((CFAbsoluteTimeGetCurrent() - keyUp) * 1000))")
+
+            var text = full
+            if liveWasTyping {
+                lastTranscript = full
+                if let delta = LiveTyping.delta(typed: liveTyped, rendered: full) {
+                    text = delta
+                } else {
+                    let tail = Array(words.dropFirst(live.committed.count))
+                    let tailText = TextPipeline.process(
+                        words: tail, config: .from(config), dictionary: dictionary, fillerSpans: spans
+                    )
+                    text = tailText.isEmpty ? "" : " " + tailText
+                    log("live mismatch typed=\(liveTyped.count) full=\(full.count)")
+                }
+                log("live final delta=\(text.count) typed=\(liveTyped.count)")
+                liveTyped = ""
+                if text.isEmpty {
+                    if autoSend, liveTypingAllowed() {
+                        try? await Task.sleep(nanoseconds: 150_000_000)
+                        await injector.pressReturn()
+                    }
+                    menu.update(.idle)
+                    return
+                }
+            }
 
             let hasText = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             let currentPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
@@ -211,9 +306,19 @@ final class AppController {
 
             switch outcome {
             case .paste(let send):
-                let posted = await injector.paste(text, autoSend: send, verifyTarget: verify)
+                let posted = await injector.paste(
+                    text,
+                    autoSend: send,
+                    verifyTarget: verify,
+                    priorSnapshot: clipboardToken,
+                    settleSeconds: config.pasteSettleSeconds,
+                    since: keyUp,
+                    onStage: { [debugLogURL, debugLogging = config.debugLogging] stage, ms in
+                        DebugLog(enabled: debugLogging, url: debugLogURL).record("stage \(stage) elapsed_ms=\(ms)")
+                    }
+                )
                 if hasText {
-                    lastTranscript = text
+                    lastTranscript = full
                 }
                 if posted {
                     log("pasted autoSend=\(send)")
@@ -224,8 +329,8 @@ final class AppController {
             case .clipboardOnly(let reason):
                 if hasText {
                     NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(text, forType: .string)
-                    lastTranscript = text
+                    NSPasteboard.general.setString(full, forType: .string)
+                    lastTranscript = full
                 }
                 Notifier.post(title: "Fennec", body: Self.message(for: reason))
                 log("clipboardOnly reason=\(reason)")
@@ -242,13 +347,62 @@ final class AppController {
         menu.update(.idle)
     }
 
-    private func transcribeWithRetry(_ samples: [Float]) async throws -> Transcript {
-        var transcript = try await transcriber.transcribe(samples: samples, sampleRate: Recorder.sampleRate)
-        if transcript.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            log("empty transcription, retrying once")
-            transcript = try await transcriber.transcribe(samples: samples, sampleRate: Recorder.sampleRate)
+    private func startLiveTyping() {
+        live = LiveCommitter()
+        liveTyped = ""
+        liveBlocked = false
+        liveTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: Self.livePassInterval)
+                guard let self, !Task.isCancelled else { return }
+                await self.livePass()
+            }
         }
-        return transcript
+    }
+
+    /// Transcribes recording 
+    private func livePass() async {
+        let samples = recorder.snapshot()
+        let duration = Double(samples.count) / Recorder.sampleRate
+        guard duration >= 1.0 else { return }
+        let passStart = CFAbsoluteTimeGetCurrent()
+        guard let transcript = try? await transcriber.transcribe(
+            samples: samples,
+            sampleRate: Recorder.sampleRate
+        ) else { return }
+        guard isRecording, !Task.isCancelled else { return }
+        let fresh = live.update(words: transcript.words, duration: duration)
+        log("live pass audio_ms=\(Int(duration * 1000)) pass_ms=\(Int((CFAbsoluteTimeGetCurrent() - passStart) * 1000)) committed=\(live.committed.count)")
+        guard !fresh.isEmpty, liveTypingAllowed() else { return }
+        let rendered = TextPipeline.process(
+            words: live.committed,
+            config: .from(config),
+            dictionary: dictionary,
+            fillerSpans: []
+        )
+        guard let delta = LiveTyping.delta(typed: liveTyped, rendered: rendered), !delta.isEmpty else { return }
+        Injector.typeToSystem(delta)
+        liveTyped += delta
+    }
+
+    private func liveTypingAllowed() -> Bool {
+        guard !liveBlocked else { return false }
+        let focused = target.stillFocused(
+            currentPID: NSWorkspace.shared.frontmostApplication?.processIdentifier
+        )
+        if focused, !IsSecureEventInputEnabled(), Permissions.canPostKeys() { return true }
+        liveBlocked = true
+        log("live typing stopped focused=\(focused)")
+        return false
+    }
+
+    private func transcribeWithRetry(_ samples: [Float]) async throws -> Transcript {
+        try await transcriber.transcribeWithRetry(
+            samples: samples,
+            sampleRate: Recorder.sampleRate
+        ) { [weak self] in
+            await self?.log("empty transcription, retrying once")
+        }
     }
 
     private func loadConfiguration() {
@@ -258,10 +412,12 @@ final class AppController {
             for warning in result.warnings { log("config warning: \(warning)") }
             dictionary = (try? TermDictionary.load(from: config.dictionaryURL)) ?? .builtIn
             menu.hotkeyName = config.hotkey.displayName
+            menu.liveTypingEnabled = config.liveTyping
             log("config loaded hotkey=\(config.hotkey.rawValue) autoSend=\(config.autoSend.rawValue)")
         } catch {
             config = Config()
             dictionary = .builtIn
+            menu.liveTypingEnabled = config.liveTyping
             menu.update(.problem("Config error: \(error)"))
         }
     }
@@ -294,7 +450,9 @@ final class AppController {
     private func requestPermissions() {
         Task {
             if !Permissions.microphoneGranted() {
-                _ = await Permissions.requestMicrophone()
+                if await Permissions.requestMicrophone() {
+                    self.recorder.warmUp()
+                }
             }
             if !Permissions.canPostKeys() {
                 Permissions.requestAccessibility()

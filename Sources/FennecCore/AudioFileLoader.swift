@@ -6,6 +6,23 @@ public enum AudioFileLoaderError: Error {
     case conversionFailed
 }
 
+private final class OneShotAudioInput: @unchecked Sendable {
+    private let lock = NSLock()
+    private var buffer: AVAudioPCMBuffer?
+
+    init(_ buffer: AVAudioPCMBuffer) {
+        self.buffer = buffer
+    }
+
+    func take() -> AVAudioPCMBuffer? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let buffer else { return nil }
+        self.buffer = nil
+        return buffer
+    }
+}
+
 public enum AudioFileLoader {
     public static let defaultSampleRate: Double = 16000
 
@@ -38,30 +55,40 @@ public enum AudioFileLoader {
         ), let converter = AVAudioConverter(from: inputFormat, to: outputFormat) else {
             throw AudioFileLoaderError.conversionFailed
         }
-        let capacity = AVAudioFrameCount(
-            Double(inputBuffer.frameLength) * sampleRate / inputFormat.sampleRate
-        ) + 512
-        guard let outputBuffer = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: capacity) else {
-            throw AudioFileLoaderError.conversionFailed
+        var samples: [Float] = []
+        let oneShotInput = OneShotAudioInput(inputBuffer)
+        while true {
+            guard let outputBuffer = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: 8192) else {
+                throw AudioFileLoaderError.conversionFailed
+            }
+
+            var conversionError: NSError?
+            let status = converter.convert(to: outputBuffer, error: &conversionError) { _, inputStatus in
+                guard let input = oneShotInput.take() else {
+                    inputStatus.pointee = .endOfStream
+                    return nil
+                }
+                inputStatus.pointee = .haveData
+                return input
+            }
+
+            if status == .error {
+                throw conversionError ?? AudioFileLoaderError.conversionFailed
+            }
+            if let channel = outputBuffer.floatChannelData?[0], outputBuffer.frameLength > 0 {
+                samples.append(contentsOf: UnsafeBufferPointer(
+                    start: channel,
+                    count: Int(outputBuffer.frameLength)
+                ))
+            }
+            if status == .endOfStream || status == .inputRanDry {
+                break
+            }
         }
 
-        var conversionError: NSError?
-        var suppliedInput = false
-        let status = converter.convert(to: outputBuffer, error: &conversionError) { _, outputStatus in
-            if suppliedInput {
-                outputStatus.pointee = .noDataNow
-                return nil
-            }
-            suppliedInput = true
-            outputStatus.pointee = .haveData
-            return inputBuffer
-        }
-        if status == .error {
-            throw conversionError ?? AudioFileLoaderError.conversionFailed
-        }
-        guard let channel = outputBuffer.floatChannelData?[0] else {
+        guard !samples.isEmpty else {
             throw AudioFileLoaderError.conversionFailed
         }
-        return Array(UnsafeBufferPointer(start: channel, count: Int(outputBuffer.frameLength)))
+        return samples
     }
 }

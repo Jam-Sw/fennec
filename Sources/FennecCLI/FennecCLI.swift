@@ -8,7 +8,7 @@ struct FennecCLI {
         let arguments = CommandLine.arguments
         guard arguments.count >= 2 else {
             fail("""
-            usage: fennec <command> [options]
+            usage: fennec-cli <command> [options]
             commands:
               probe <audio-file>
               transcribe <audio-file> [--cleanup] [--dictionary <path>] [--json] [--timings]
@@ -21,7 +21,7 @@ struct FennecCLI {
 
         switch command {
         case "probe", "transcribe":
-            guard let path = rest.first else { fail("usage: fennec \(command) <audio-file>", code: 64) }
+            guard let path = rest.first else { fail("usage: fennec-cli \(command) <audio-file>", code: 64) }
             let wantsCleanup = rest.contains("--cleanup")
             let wantsJSON = rest.contains("--json")
             let wantsTimings = rest.contains("--timings")
@@ -39,7 +39,7 @@ struct FennecCLI {
                 let loadMS = milliseconds(since: loadStart)
 
                 let transcribeStart = CFAbsoluteTimeGetCurrent()
-                let transcript = try await transcriber.transcribe(samples: samples, sampleRate: 16000)
+                let transcript = try await transcriber.transcribeWithRetry(samples: samples, sampleRate: AudioFileLoader.defaultSampleRate)
                 let transcribeMS = milliseconds(since: transcribeStart)
 
                 var text = transcript.text
@@ -59,7 +59,7 @@ struct FennecCLI {
                     }
 
                     let fillerStart = CFAbsoluteTimeGetCurrent()
-                    let spans = (try? await FillerDetectorFactory.make().fillerRanges(
+                    let spans = (try? await HeuristicFillerDetector().fillerRanges(
                         samples: samples,
                         sampleRate: 16000,
                         words: transcript.words
@@ -92,7 +92,7 @@ struct FennecCLI {
 
         case "paste":
             guard let textIndex = rest.firstIndex(of: "--text"), rest.indices.contains(textIndex + 1) else {
-                fail("usage: fennec paste --text \"...\" [--auto-send]", code: 64)
+                fail("usage: fennec-cli paste --text \"...\" [--auto-send]", code: 64)
             }
             await Injector().paste(rest[textIndex + 1], autoSend: rest.contains("--auto-send"))
 

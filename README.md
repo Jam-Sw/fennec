@@ -41,7 +41,7 @@ That's the whole setup. The installer checks your Mac, builds Fennec from source
 it to `/Applications`, and opens it. Run the same command again to update.
 
 <details>
-<summary>What the installer does, and why it builds from source</summary>
+<summary>Installer</summary>
 
 1. Checks for an Apple Silicon Mac, macOS 15 or later, 5 GB of free space, and an
    internet connection, and says exactly what to do if one is missing.
@@ -59,9 +59,9 @@ it to `/Applications`, and opens it. Run the same command again to update.
 5. Copies `Fennec.app` to `/Applications` (or `~/Applications` if that isn't writable) and
    opens it.
 
-Building on your own machine means there's no downloaded binary for Gatekeeper to
-quarantine, and you can read every line of what you're running first. Prefer to read the
-script before running it? `curl -fsSL https://raw.githubusercontent.com/Jam-Sw/fennec/main/install.sh | less`
+Prefer to read the script before running it? 
+<br/>
+`curl -fsSL https://raw.githubusercontent.com/Jam-Sw/fennec/main/install.sh | less`
 
 </details>
 
@@ -130,6 +130,14 @@ The menu bar fox shows what's happening:
 | `maxDurationSeconds` | Recording stops and transcribes after this long |
 | `minDurationSeconds` | Shorter presses are ignored, so a stray tap does nothing |
 | `debugLogging` | Writes timings and paste decisions to `~/Library/Logs/Fennec/fennec.log` |
+
+### Live typing (beta)
+
+Types words while you hold the hotkey instead of pasting once on release. Fennec
+re-transcribes as you talk and only types a word once it stays the same across passes, so
+text doesn't flicker or get rewritten under your cursor. It's off by default. Turn it on
+with *Live typing (beta)* in the menu, or set `"liveTyping": true` in the config. It's
+still rough, so expect the odd mistake.
 
 ### Dictionary
 
@@ -209,7 +217,7 @@ swift test                          # unit tests
 There's also a command line tool for transcribing files:
 
 ```bash
-swift run -c release fennec transcribe recording.wav --cleanup
+swift run -c release fennec-cli transcribe recording.wav --cleanup
 ```
 
 Code map: `FennecCore` holds the pure logic (text pipeline, dictionary, config, hotkey

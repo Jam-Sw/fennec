@@ -1,6 +1,7 @@
 import AppKit
 import FennecCore
 import ServiceManagement
+import SwiftUI
 
 @MainActor
 final class MenuBar: NSObject {
@@ -34,38 +35,47 @@ final class MenuBar: NSObject {
     }
 
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-    private let statusMenuItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
-    private let hintMenuItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    let waveformModel = WaveformHeaderModel()
+    private let headerMenuItem = NSMenuItem()
     private let launchAtLoginItem = NSMenuItem(title: "Launch at login", action: nil, keyEquivalent: "")
+    private let liveTypingItem = NSMenuItem(title: "Live typing (beta)", action: nil, keyEquivalent: "")
     private var status: Status?
 
     var hotkeyName = Hotkey.rightOption.displayName {
-        didSet { hintMenuItem.title = "Hold \(hotkeyName) to dictate" }
+        didSet { waveformModel.hotkeyName = hotkeyName }
+    }
+
+    var liveTypingEnabled = false {
+        didSet { liveTypingItem.state = liveTypingEnabled ? .on : .off }
     }
 
     var onCopyLastTranscript: (() -> Void)?
     var onEditDictionary: (() -> Void)?
     var onEditConfig: (() -> Void)?
     var onReloadConfig: (() -> Void)?
+    var onToggleLiveTyping: (() -> Void)?
     var onRevealLog: (() -> Void)?
     var onRequestPermissions: (() -> Void)?
     var onQuit: (() -> Void)?
 
     override init() {
         super.init()
+        statusItem.autosaveName = "FennecStatusItem"
         let menu = NSMenu()
         menu.delegate = self
-        statusMenuItem.isEnabled = false
-        hintMenuItem.isEnabled = false
-        hintMenuItem.title = "Hold \(hotkeyName) to dictate"
-        menu.addItem(statusMenuItem)
-        menu.addItem(hintMenuItem)
+        let headerView = NSHostingView(rootView: WaveformHeaderView(model: waveformModel))
+        headerView.frame = NSRect(x: 0, y: 0, width: 250, height: 42)
+        headerMenuItem.view = headerView
+        menu.addItem(headerMenuItem)
         menu.addItem(.separator())
         add(menu, "Copy last transcript", #selector(copyLast))
         add(menu, "Edit dictionary…", #selector(editDictionary))
         add(menu, "Edit config…", #selector(editConfig))
         add(menu, "Reload config", #selector(reloadConfig))
         menu.addItem(.separator())
+        liveTypingItem.action = #selector(toggleLiveTyping)
+        liveTypingItem.target = self
+        menu.addItem(liveTypingItem)
         launchAtLoginItem.action = #selector(toggleLaunchAtLogin)
         launchAtLoginItem.target = self
         menu.addItem(launchAtLoginItem)
@@ -82,8 +92,9 @@ final class MenuBar: NSObject {
         guard status != self.status else { return }
         let glyphChanged = status.glyph != self.status?.glyph
         self.status = status
-        statusMenuItem.title = status.title
+        waveformModel.status = status
         statusItem.button?.toolTip = "Fennec: \(status.title)"
+        statusItem.button?.setAccessibilityLabel("Fennec: \(status.title)")
         if glyphChanged {
             statusItem.button?.image = MenuBarGlyph.image(status.glyph)
         }
@@ -99,6 +110,7 @@ final class MenuBar: NSObject {
     @objc private func editDictionary() { onEditDictionary?() }
     @objc private func editConfig() { onEditConfig?() }
     @objc private func reloadConfig() { onReloadConfig?() }
+    @objc private func toggleLiveTyping() { onToggleLiveTyping?() }
     @objc private func permissions() { onRequestPermissions?() }
     @objc private func revealLog() { onRevealLog?() }
     @objc private func quit() { onQuit?() }
@@ -115,23 +127,33 @@ final class MenuBar: NSObject {
             let alert = NSAlert()
             alert.messageText = "Couldn't change Launch at login"
             alert.informativeText = error.localizedDescription
+            alert.window.preventsApplicationTerminationWhenModal = false
             alert.runModal()
         }
     }
 
     @objc private func about() {
         NSApp.activate()
+        
         let alert = NSAlert()
-        alert.messageText = "Fennec \(fennecVersion)"
-        alert.informativeText = """
-            On-device push-to-talk dictation. Hold \(hotkeyName), speak, release.
+        alert.alertStyle = .informational
+        if let icon = NSApp.applicationIconImage {
+            alert.icon = icon
+        }
+        alert.messageText = "Fennec"
+        alert.informativeText = String(localized: """
+            Activate with \(hotkeyName), speak, release.
 
             Speech recognition powered by Desert Ant Labs.
-            Copyright © 2026 Jam-Sw. Source-available under the PolyForm Strict License.
-            """
-        alert.addButton(withTitle: "OK")
-        alert.addButton(withTitle: "Desert Ant Labs")
-        if alert.runModal() == .alertSecondButtonReturn, let url = URL(string: "https://desertant.com") {
+            Copyright © 2026 Jam-Sw.
+
+            V \(fennecVersion)
+            """)
+        alert.addButton(withTitle: String(localized: "OK"))
+        alert.addButton(withTitle: String(localized: "Source"))
+        alert.window.preventsApplicationTerminationWhenModal = false
+
+        if alert.runModal() == .alertSecondButtonReturn, let url = URL(string: "https://github.com/Jam-Sw/fennec/blob/main/README.md") {
             NSWorkspace.shared.open(url)
         }
     }

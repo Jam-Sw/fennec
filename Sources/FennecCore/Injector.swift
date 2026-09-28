@@ -21,6 +21,13 @@ public actor Injector {
         self.postKey = postKey
     }
 
+    /// Captures the current pasteboard contents. Call this at key-down, while
+    /// the user is still speaking, so the (potentially large) capture is off
+    /// the paste critical path; hand the result to `paste(priorSnapshot:)`.
+    public func snapshotToken() -> ClipboardSnapshotToken {
+        ClipboardTransaction.snapshotToken(pasteboard)
+    }
+
     /// Write the text, let the focused app settle, then post Cmd+V.
     ///
     /// `verifyTarget` runs again immediately before the keystrokes, so a focus
@@ -30,17 +37,29 @@ public actor Injector {
     public func paste(
         _ text: String,
         autoSend: Bool,
-        verifyTarget: (@Sendable () async -> Bool)? = nil
+        verifyTarget: (@Sendable () async -> Bool)? = nil,
+        priorSnapshot: ClipboardSnapshotToken? = nil,
+        settleSeconds: Double = 0.02,
+        since start: CFAbsoluteTime? = nil,
+        onStage: (@Sendable (String, Int) -> Void)? = nil
     ) async -> Bool {
-        let write = ClipboardTransaction.write(text, to: pasteboard)
-        try? await Task.sleep(nanoseconds: 100_000_000)
+        func mark(_ stage: String) {
+            guard let start, let onStage else { return }
+            onStage(stage, Int((CFAbsoluteTimeGetCurrent() - start) * 1000))
+        }
+        let write = ClipboardTransaction.write(text, to: pasteboard, priorSnapshot: priorSnapshot)
+        mark("snapshot")
+        try? await Task.sleep(nanoseconds: UInt64(max(0, settleSeconds) * 1_000_000_000))
+        mark("settle")
         if let verifyTarget, await verifyTarget() == false {
             return false
         }
-        postKey(await MainActor.run { Self.pasteKeyCode() }, .maskCommand)
+        postKey(await MainActor.run { Self.cachedPasteKeyCode() }, .maskCommand)
+        mark("post")
         if autoSend {
             try? await Task.sleep(nanoseconds: 150_000_000)
             if let verifyTarget, await verifyTarget() == false {
+                ClipboardTransaction.restore(write, to: pasteboard)
                 return false
             }
             postKey(36, [])
@@ -48,6 +67,70 @@ public actor Injector {
         try? await Task.sleep(nanoseconds: 150_000_000)
         ClipboardTransaction.restore(write, to: pasteboard)
         return true
+    }
+
+    /// Types text as keystrokes carrying Unicode strings, leaving the
+    /// clipboard alone. Live typing sends many small pieces, and a clipboard
+    /// round-trip for each would be slow and would race the user's own copies.
+    /// The modifier flags are cleared so the held hotkey does not turn the
+    /// letters into Option-characters.
+    public static func typeToSystem(_ text: String) {
+        guard let source = CGEventSource(stateID: .privateState) else { return }
+        let units = Array(text.utf16)
+        // Events carry at most 20 UTF-16 units; longer strings are truncated.
+        var index = 0
+        while index < units.count {
+            var end = min(index + 20, units.count)
+            // Keep a surrogate pair together.
+            if end < units.count, UTF16.isLeadSurrogate(units[end - 1]) { end -= 1 }
+            var chunk = Array(units[index ..< end])
+            let down = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true)
+            let up = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
+            down?.flags = []
+            up?.flags = []
+            down?.keyboardSetUnicodeString(stringLength: chunk.count, unicodeString: &chunk)
+            up?.keyboardSetUnicodeString(stringLength: chunk.count, unicodeString: &chunk)
+            down?.post(tap: .cghidEventTap)
+            up?.post(tap: .cghidEventTap)
+            index = end
+        }
+    }
+
+    /// Posts Return, for auto-send after live typing.
+    public func pressReturn() {
+        postKey(36, [])
+    }
+
+    /// Caches `pasteKeyCode()` so a paste doesn't pay for a 128-code
+    /// `UCKeyTranslate` scan every time; invalidated when the keyboard input
+    /// source changes.
+    @MainActor
+    private final class PasteKeyCodeCache {
+        static let shared = PasteKeyCodeCache()
+        private var cached: CGKeyCode?
+        private var observer: NSObjectProtocol?
+
+        private init() {
+            observer = DistributedNotificationCenter.default().addObserver(
+                forName: Notification.Name(kTISNotifySelectedKeyboardInputSourceChanged as String),
+                object: nil,
+                queue: nil
+            ) { [weak self] _ in
+                Task { @MainActor in self?.cached = nil }
+            }
+        }
+
+        func keyCode() -> CGKeyCode {
+            if let cached { return cached }
+            let value = Injector.pasteKeyCode()
+            cached = value
+            return value
+        }
+    }
+
+    @MainActor
+    public static func cachedPasteKeyCode() -> CGKeyCode {
+        PasteKeyCodeCache.shared.keyCode()
     }
 
     /// The key that gives "v" with Command held in the current keyboard layout,
