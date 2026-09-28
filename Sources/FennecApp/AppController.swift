@@ -75,6 +75,18 @@ final class AppController {
                 self.recorder.updatePreRoll(seconds: self.config.preRollSeconds)
             }
         }
+        menu.onToggleLiveTyping = { [weak self] in
+            guard let self else { return }
+            self.config.liveTyping.toggle()
+            do {
+                try Config.write(self.config, to: Config.defaultConfigURL)
+            } catch {
+                self.config.liveTyping.toggle()
+                self.menu.update(.problem("Config error: \(error)"))
+            }
+            self.menu.liveTypingEnabled = self.config.liveTyping
+            self.log("liveTyping=\(self.config.liveTyping)")
+        }
         menu.onRevealLog = { [weak self] in
             guard let self else { return }
             NSWorkspace.shared.selectFile(
@@ -400,10 +412,12 @@ final class AppController {
             for warning in result.warnings { log("config warning: \(warning)") }
             dictionary = (try? TermDictionary.load(from: config.dictionaryURL)) ?? .builtIn
             menu.hotkeyName = config.hotkey.displayName
+            menu.liveTypingEnabled = config.liveTyping
             log("config loaded hotkey=\(config.hotkey.rawValue) autoSend=\(config.autoSend.rawValue)")
         } catch {
             config = Config()
             dictionary = .builtIn
+            menu.liveTypingEnabled = config.liveTyping
             menu.update(.problem("Config error: \(error)"))
         }
     }

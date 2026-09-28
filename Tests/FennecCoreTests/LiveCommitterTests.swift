@@ -56,3 +56,13 @@ import Testing
     #expect(config.liveTyping)
     #expect(Config().liveTyping == false)
 }
+
+@Test func configRoundTripsLiveTyping() throws {
+    let url = FileManager.default.temporaryDirectory
+        .appendingPathComponent("fennec-config-\(UUID().uuidString).json")
+    defer { try? FileManager.default.removeItem(at: url) }
+    var config = Config()
+    config.liveTyping = true
+    try Config.write(config, to: url)
+    #expect(try Config.loadOrCreate(at: url).config.liveTyping)
+}

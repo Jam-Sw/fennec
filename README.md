@@ -131,6 +131,14 @@ The menu bar fox shows what's happening:
 | `minDurationSeconds` | Shorter presses are ignored, so a stray tap does nothing |
 | `debugLogging` | Writes timings and paste decisions to `~/Library/Logs/Fennec/fennec.log` |
 
+### Live typing (beta)
+
+Types words while you hold the hotkey instead of pasting once on release. Fennec
+re-transcribes as you talk and only types a word once it stays the same across passes, so
+text doesn't flicker or get rewritten under your cursor. It's off by default. Turn it on
+with *Live typing (beta)* in the menu, or set `"liveTyping": true` in the config. It's
+still rough, so expect the odd mistake.
+
 ### Dictionary
 
 *Edit dictionary…* opens `~/.config/fennec/dictionary.txt`, prefilled with the built-in

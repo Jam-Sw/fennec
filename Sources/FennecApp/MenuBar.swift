@@ -38,16 +38,22 @@ final class MenuBar: NSObject {
     let waveformModel = WaveformHeaderModel()
     private let headerMenuItem = NSMenuItem()
     private let launchAtLoginItem = NSMenuItem(title: "Launch at login", action: nil, keyEquivalent: "")
+    private let liveTypingItem = NSMenuItem(title: "Live typing (beta)", action: nil, keyEquivalent: "")
     private var status: Status?
 
     var hotkeyName = Hotkey.rightOption.displayName {
         didSet { waveformModel.hotkeyName = hotkeyName }
     }
 
+    var liveTypingEnabled = false {
+        didSet { liveTypingItem.state = liveTypingEnabled ? .on : .off }
+    }
+
     var onCopyLastTranscript: (() -> Void)?
     var onEditDictionary: (() -> Void)?
     var onEditConfig: (() -> Void)?
     var onReloadConfig: (() -> Void)?
+    var onToggleLiveTyping: (() -> Void)?
     var onRevealLog: (() -> Void)?
     var onRequestPermissions: (() -> Void)?
     var onQuit: (() -> Void)?
@@ -67,6 +73,9 @@ final class MenuBar: NSObject {
         add(menu, "Edit config…", #selector(editConfig))
         add(menu, "Reload config", #selector(reloadConfig))
         menu.addItem(.separator())
+        liveTypingItem.action = #selector(toggleLiveTyping)
+        liveTypingItem.target = self
+        menu.addItem(liveTypingItem)
         launchAtLoginItem.action = #selector(toggleLaunchAtLogin)
         launchAtLoginItem.target = self
         menu.addItem(launchAtLoginItem)
@@ -101,6 +110,7 @@ final class MenuBar: NSObject {
     @objc private func editDictionary() { onEditDictionary?() }
     @objc private func editConfig() { onEditConfig?() }
     @objc private func reloadConfig() { onReloadConfig?() }
+    @objc private func toggleLiveTyping() { onToggleLiveTyping?() }
     @objc private func permissions() { onRequestPermissions?() }
     @objc private func revealLog() { onRevealLog?() }
     @objc private func quit() { onQuit?() }
