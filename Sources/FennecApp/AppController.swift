@@ -48,10 +48,8 @@ final class AppController {
             Task { @MainActor in self?.log(message) }
         }
         // Deferred to the next run-loop turn: `start()` runs before
-        // `NSApplication.run()` (see FennecApp.main()), and engine.prepare()
-        // resolving the default input/output device needs the run loop
-        // already pumping - calling it inline here crashes intermittently
-        // with "inputNode != nullptr || outputNode != nullptr".
+        // `NSApplication.run()` (see FennecApp.main()), and resolving the
+        // default input device in warmUp() wants the run loop already pumping.
         DispatchQueue.main.async { [weak self] in
             guard let self, Permissions.microphoneGranted() else { return }
             self.recorder.warmUp()

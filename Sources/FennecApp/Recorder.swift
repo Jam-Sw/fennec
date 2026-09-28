@@ -67,6 +67,10 @@ final class Recorder: @unchecked Sendable {
     /// Resolves the input route and allocates the engine's render resources
     /// ahead of time. Call once at launch; safe to call again.
     func warmUp() {
+        // AVAudioEngine creates its nodes lazily; prepare() on an engine
+        // with neither an input nor an output node throws
+        // "inputNode != nullptr || outputNode != nullptr".
+        _ = engine.inputNode
         engine.prepare()
         logInputRoute()
     }
