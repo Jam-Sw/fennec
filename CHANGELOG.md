@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## 0.1.0 (2026-09-28)
 
 First public release, source-available under the PolyForm Strict License 1.0.0.
 
@@ -20,3 +20,7 @@ First public release, source-available under the PolyForm Strict License 1.0.0.
 - Editing the dictionary starts from the built-in terms instead of replacing them with an
   empty file.
 - Reloading the config applies a new hotkey without a relaunch.
+- A live waveform in the menu header while you dictate.
+- Live typing (beta), off by default: types settled words while the hotkey is held instead
+  of pasting once on release. Turn it on from the menu.
+- Faster paste and a warm audio engine, so dictation starts and lands sooner.
