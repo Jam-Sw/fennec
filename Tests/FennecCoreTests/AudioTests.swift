@@ -45,20 +45,30 @@ private let fixturesRoot = URL(fileURLWithPath: #filePath)
     .deletingLastPathComponent()
     .deletingLastPathComponent()
 
-@Test func audioFileLoaderLoads16KilohertzWave() throws {
+// The fixtures are gitignored and made locally by scripts/make-fixtures.sh
+// (hello.* comes from `say`, whose output depends on the installed voice),
+// so these tests only run where that script has been run.
+private func fixture(_ name: String) -> Bool {
+    FileManager.default.fileExists(atPath: fixturesRoot.appendingPathComponent("fixtures/\(name)").path)
+}
+
+@Test(.enabled(if: fixture("hello.wav"), "run scripts/make-fixtures.sh"))
+func audioFileLoaderLoads16KilohertzWave() throws {
     let samples = try AudioFileLoader.loadSamples(at: fixturesRoot.appendingPathComponent("fixtures/hello.wav"))
     #expect(samples.count == 81652)
     #expect(samples.contains { $0 != 0 })
 }
 
-@Test func audioFileLoaderResamplesAiffTo16Kilohertz() throws {
+@Test(.enabled(if: fixture("hello.aiff"), "run scripts/make-fixtures.sh"))
+func audioFileLoaderResamplesAiffTo16Kilohertz() throws {
     let samples = try AudioFileLoader.loadSamples(at: fixturesRoot.appendingPathComponent("fixtures/hello.aiff"))
     #expect(!samples.isEmpty)
     #expect(abs(samples.count - 81652) <= 64)
     #expect(samples.contains { abs($0) > 0.01 })
 }
 
-@Test func audioFileLoaderLoadsSilence() throws {
+@Test(.enabled(if: fixture("silence.wav"), "run scripts/make-fixtures.sh"))
+func audioFileLoaderLoadsSilence() throws {
     let samples = try AudioFileLoader.loadSamples(at: fixturesRoot.appendingPathComponent("fixtures/silence.wav"))
     #expect(samples.count == 32000)
     #expect(samples.allSatisfy { abs($0) < 0.01 })
