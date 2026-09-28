@@ -55,6 +55,9 @@ final class AppController {
             self.recorder.warmUp()
         }
 
+        menu.waveformModel.fetchAudio = { [weak recorder] in
+            recorder?.recentSamples(count: 1024) ?? []
+        }
         menu.onCopyLastTranscript = { [weak self] in
             guard let self, !self.lastTranscript.isEmpty else { return }
             NSPasteboard.general.clearContents()

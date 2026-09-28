@@ -12,7 +12,7 @@ enum MenuBarGlyph {
 
     private static let viewBox = NSRect(x: 160, y: 120, width: 704, height: 704)
     private static let side: CGFloat = 18
-    private static let listeningColor = NSColor(srgbRed: 0.95, green: 0.58, blue: 0.29, alpha: 1)
+    static let listeningColor = NSColor(srgbRed: 0.95, green: 0.58, blue: 0.29, alpha: 1)
 
     static func image(_ style: Style) -> NSImage {
         let image = NSImage(size: NSSize(width: side, height: side), flipped: true) { _ in

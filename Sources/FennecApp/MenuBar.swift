@@ -1,6 +1,7 @@
 import AppKit
 import FennecCore
 import ServiceManagement
+import SwiftUI
 
 @MainActor
 final class MenuBar: NSObject {
@@ -34,13 +35,13 @@ final class MenuBar: NSObject {
     }
 
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-    private let statusMenuItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
-    private let hintMenuItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    let waveformModel = WaveformHeaderModel()
+    private let headerMenuItem = NSMenuItem()
     private let launchAtLoginItem = NSMenuItem(title: "Launch at login", action: nil, keyEquivalent: "")
     private var status: Status?
 
     var hotkeyName = Hotkey.rightOption.displayName {
-        didSet { hintMenuItem.title = "Hold \(hotkeyName) to dictate" }
+        didSet { waveformModel.hotkeyName = hotkeyName }
     }
 
     var onCopyLastTranscript: (() -> Void)?
@@ -56,11 +57,10 @@ final class MenuBar: NSObject {
         statusItem.autosaveName = "FennecStatusItem"
         let menu = NSMenu()
         menu.delegate = self
-        statusMenuItem.isEnabled = false
-        hintMenuItem.isEnabled = false
-        hintMenuItem.title = "Hold \(hotkeyName) to dictate"
-        menu.addItem(statusMenuItem)
-        menu.addItem(hintMenuItem)
+        let headerView = NSHostingView(rootView: WaveformHeaderView(model: waveformModel))
+        headerView.frame = NSRect(x: 0, y: 0, width: 250, height: 42)
+        headerMenuItem.view = headerView
+        menu.addItem(headerMenuItem)
         menu.addItem(.separator())
         add(menu, "Copy last transcript", #selector(copyLast))
         add(menu, "Edit dictionary…", #selector(editDictionary))
@@ -83,7 +83,7 @@ final class MenuBar: NSObject {
         guard status != self.status else { return }
         let glyphChanged = status.glyph != self.status?.glyph
         self.status = status
-        statusMenuItem.title = status.title
+        waveformModel.status = status
         statusItem.button?.toolTip = "Fennec: \(status.title)"
         statusItem.button?.setAccessibilityLabel("Fennec: \(status.title)")
         if glyphChanged {

@@ -156,6 +156,14 @@ final class Recorder: @unchecked Sendable {
         return samples
     }
 
+    /// The most recent samples captured so far.
+    func recentSamples(count: Int = 1024) -> [Float] {
+        lock.lock()
+        defer { lock.unlock() }
+        if samples.count <= count { return samples }
+        return Array(samples.suffix(count))
+    }
+
     /// NSLock's `lock()`/`unlock()` can't be called directly from an `async`
     /// function body, so the critical section lives in this synchronous
     /// helper instead.
