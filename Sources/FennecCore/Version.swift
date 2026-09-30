@@ -1,3 +1,3 @@
 import Foundation
 
-public let fennecVersion = "0.1.0"
+public let fennecVersion = "0.1.1"

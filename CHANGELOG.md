@@ -1,9 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.1.1 (2026-09-30)
 
-- New icon: the fox in profile, ear up, in the Jam-Sw faceted stipple style. The menu bar
-  glyph follows the same silhouette.
+- New icon
 
 ## 0.1.0 (2026-09-28)
 
