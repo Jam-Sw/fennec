@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- New icon: the fox in profile, ear up, in the Jam-Sw faceted stipple style. The menu bar
+  glyph follows the same silhouette.
+
 ## 0.1.0 (2026-09-28)
 
 First public release, source-available under the PolyForm Strict License 1.0.0.

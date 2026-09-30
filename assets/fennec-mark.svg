@@ -1,29 +1,37 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <!-- Fennec: a fennec fox, all ears. The mascot without a background. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="240 120 602 690" role="img" aria-label="Fennec">
+  <!-- Fennec: the fox in profile, ear up. The app icon's mascot without the plate (a Cut in ICON_STYLE.md). -->
+  <title>Fennec</title>
   <defs>
-    <linearGradient id="fur" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#F9BA6E"/>
-      <stop offset="1" stop-color="#E8854A"/>
-    </linearGradient>
-    <linearGradient id="inner" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FFE6CC"/>
-      <stop offset="1" stop-color="#F7B996"/>
-    </linearGradient>
+    <clipPath id="fox">
+      <polygon points="300,130 560,470 300,560"/>
+      <polygon points="300,540 520,440 640,500 820,650 800,690 600,720 420,800 250,760"/>
+    </clipPath>
+    <clipPath id="earBack"><polygon points="470,170 640,500 520,460"/></clipPath>
+    <clipPath id="earIn"><polygon points="330,230 500,470 340,520"/></clipPath>
+    <filter id="grain" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.365" numOctaves="2" seed="3" stitchTiles="stitch" result="noise"/>
+      <feColorMatrix in="noise" type="matrix" result="gray"
+        values="0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0 0 0 1 0"/>
+      <feComponentTransfer in="gray" result="stipple">
+        <feFuncR type="linear" slope="1.45" intercept="-0.22"/>
+        <feFuncG type="linear" slope="1.45" intercept="-0.22"/>
+        <feFuncB type="linear" slope="1.45" intercept="-0.22"/>
+      </feComponentTransfer>
+      <feBlend in="SourceGraphic" in2="stipple" mode="overlay" result="printed"/>
+      <feComposite in="printed" in2="SourceGraphic" operator="in"/>
+    </filter>
   </defs>
-  <!-- ears -->
-  <path d="M472 474 C430 360 322 226 196 140 C182 290 214 456 322 568 Z" fill="url(#fur)"/>
-  <path d="M552 474 C594 360 702 226 828 140 C842 290 810 456 702 568 Z" fill="url(#fur)"/>
-  <path d="M442 476 C404 390 324 286 242 218 C240 330 268 446 340 528 Z" fill="url(#inner)"/>
-  <path d="M582 476 C620 390 700 286 782 218 C784 330 756 446 684 528 Z" fill="url(#inner)"/>
-  <!-- head with cheek tufts -->
-  <path d="M512 800 C456 794 372 716 326 644 L270 632 L302 604 L276 574 L314 558 C330 494 406 452 512 450 C618 452 694 494 710 558 L748 574 L722 604 L754 632 L698 644 C652 716 568 794 512 800 Z" fill="url(#fur)"/>
-  <!-- cheek mask -->
-  <path d="M512 800 C466 796 400 736 358 660 C420 686 478 678 512 648 C546 678 604 686 666 660 C624 736 558 796 512 800 Z" fill="#FFF4E6"/>
-  <!-- eyes -->
-  <ellipse cx="444" cy="590" rx="25" ry="29" fill="#2B2238"/>
-  <ellipse cx="580" cy="590" rx="25" ry="29" fill="#2B2238"/>
-  <circle cx="453" cy="579" r="9" fill="#FFF4E6"/>
-  <circle cx="589" cy="579" r="9" fill="#FFF4E6"/>
-  <!-- nose -->
-  <path d="M486 734 C486 720 538 720 538 734 C538 750 524 762 512 762 C500 762 486 750 486 734 Z" fill="#2B2238"/>
+  <g filter="url(#grain)">
+    <g clip-path="url(#earBack)"><rect x="240" y="120" width="602" height="690" fill="#5E3D1B"/></g>
+    <g clip-path="url(#fox)">
+      <rect x="240" y="120" width="602" height="690" fill="#BF8A4A"/>
+      <polygon points="420,600 842,560 842,810 300,810" fill="#5E3D1B"/>
+      <polygon points="240,120 400,120 300,640 240,640" fill="#F3F0E6"/>
+      <polygon points="270,110 340,110 330,190 290,180" fill="#F5C400"/>
+    </g>
+    <g clip-path="url(#earIn)"><rect x="240" y="120" width="602" height="690" fill="#4A2F16"/></g>
+    <polygon points="600,700 820,650 800,690" fill="#F3F0E6"/>
+    <polygon points="560,560 600,536 644,560 600,578" fill="#2A1B0C"/>
+    <polygon points="790,630 832,650 800,676" fill="#2A1B0C"/>
+  </g>
 </svg>

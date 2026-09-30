@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/app-icon.png" width="160" alt="Fennec, a fennec fox with enormous ears">
+  <img src="assets/app-icon.png" width="160" alt="Fennec, a fennec fox in profile with one ear up, listening">
 </p>
 
 <h1 align="center">Fennec</h1>
