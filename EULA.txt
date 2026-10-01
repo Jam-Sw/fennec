@@ -1,0 +1,87 @@
+Fennec END USER LICENSE AGREEMENT
+Jam-Sw. EULA version 2026-09-30.
+
+Read this agreement before installing or using Fennec (the "Software").
+By installing, copying, or using the Software you agree to these terms. If you
+do not agree, do not install or use the Software.
+
+1. WHO WE ARE
+   The Software is developed and distributed by Jam-Sw ("we", "us").
+   Contact: jam.sw.org@gmail.com
+
+2. FREE LICENSE
+   We grant you a non-exclusive, non-transferable license to install and use
+   the Software on devices you own or control, at no charge, for these uses:
+   a. personal, noncommercial use; and
+   b. use by charities, schools, and public research or government bodies.
+   Use by or for a business, for paid work, or to make money is not free.
+
+3. COMMERCIAL LICENSE
+   Any other use needs a commercial license. You get one by buying it from
+   Jam-Sw or by written agreement with us. A commercial license covers the
+   number of users or devices stated at purchase and is otherwise subject to
+   this agreement. If you have been using the Software without the license
+   your use needs, you have 30 days after we notify you to buy one or stop.
+
+4. WHAT YOU MAY NOT DO
+   Unless a written agreement with Jam-Sw says otherwise, you may not:
+   a. sell, rent, lease, or sublicense the Software;
+   b. redistribute the Software, or a modified version, for commercial
+      purposes;
+   c. remove or alter any copyright, trademark, or Required Notice;
+   d. use the Jam-Sw name, logos, or the Software's name to endorse or
+      promote a product or service.
+
+5. SOURCE CODE
+   The source code is published under the PolyForm Strict License 1.0.0:
+   https://polyformproject.org/licenses/strict/1.0.0
+   That license governs the source; this agreement governs the installed
+   Software. Nothing here narrows the rights that license grants you.
+
+6. YOUR DATA
+   The Software stores your data on your device. We do not collect it. The
+   Software contacts our servers only to check for updates, and the only
+   information sent is what an update check needs (app version and platform).
+   Third-party components named in the Software's notices may send anonymous
+   usage counts to their makers; they never send your content.
+
+7. OWNERSHIP
+   The Software is licensed, not sold. Jam-Sw keeps all rights, title, and
+   interest in it, including all intellectual property rights.
+
+8. UPDATES
+   The Software may check for and install updates. Updates are covered by this
+   agreement unless they come with their own terms.
+
+9. THIRD-PARTY COMPONENTS
+   The Software includes open source components under their own licenses.
+   Their notices ship with the Software, and those licenses govern those
+   components.
+
+10. NO WARRANTY
+   THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+   PURPOSE, AND NON-INFRINGEMENT. YOU USE IT AT YOUR OWN RISK.
+
+11. LIMITATION OF LIABILITY
+   TO THE FULLEST EXTENT PERMITTED BY LAW, JAM-SW WILL NOT BE LIABLE FOR ANY
+   INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY
+   LOSS OF DATA, PROFITS, OR BUSINESS, ARISING FROM THE SOFTWARE OR THIS
+   AGREEMENT. IF WE ARE LIABLE FOR ANYTHING, OUR TOTAL LIABILITY IS LIMITED
+   TO THE AMOUNT YOU PAID US FOR THE SOFTWARE IN THE 12 MONTHS BEFORE THE
+   CLAIM.
+
+12. TERMINATION
+   This license ends automatically if you breach it. When it ends you must
+   stop using the Software and delete all copies. Sections 7, 10, 11, and 13
+   survive termination.
+
+13. GENERAL
+   This agreement, plus any commercial license you buy, is the entire
+   agreement between you and Jam-Sw about the Software. If any part is
+   unenforceable, the rest stays in effect. Not enforcing a term is not a
+   waiver of it. This agreement is governed by the laws of the Province of Ontario, Canada,
+   without regard to conflict of law rules. Consumer protection laws that
+   apply to you still apply.
+
+Copyright Jam-Sw. All rights reserved except as expressly granted above.
