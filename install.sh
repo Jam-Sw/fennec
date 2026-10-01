@@ -11,6 +11,7 @@
 #   FENNEC_REF         branch or tag to install (default: main)
 #   FENNEC_SRC         where the source checkout lives (default: ~/.local/share/fennec/src)
 #   FENNEC_CHECK_ONLY  set to 1 to run the checks, report the toolchain, and stop
+#   FENNEC_ACCEPT_EULA set to 1 to accept the license agreement without a prompt
 
 # Guard first, in plain sh syntax, so bash or sh stop here with a clear message.
 if [ -z "${ZSH_VERSION:-}" ]; then
@@ -217,11 +218,28 @@ build_and_install() {
   fail "the build failed twice. The full log is at $LOG; please attach it to an issue."
 }
 
+# Asks once per run; reads the answer from the terminal because stdin is the
+# piped script. FENNEC_ACCEPT_EULA=1 answers yes for unattended installs.
+agree_to_license() {
+  step "License agreement"
+  note "Fennec is free for personal, noncommercial use. Use for a business or paid work"
+  note "needs a commercial license from Jam-Sw (jam.sw.org@gmail.com)."
+  note "Read the full agreement: https://github.com/Jam-Sw/fennec/blob/main/EULA.txt"
+  [[ "${FENNEC_ACCEPT_EULA:-}" == 1 ]] && { note "Accepted through FENNEC_ACCEPT_EULA=1."; return; }
+  [[ -r /dev/tty ]] || fail "no terminal to ask for agreement. Set FENNEC_ACCEPT_EULA=1 to accept the agreement and install."
+  local answer
+  printf '    Do you agree to the Fennec end user license agreement? [y/N] ' >/dev/tty
+  read -r answer </dev/tty
+  [[ "$answer" == [yY]* ]] || fail "you did not accept the agreement, so nothing was installed."
+}
+
 # Everything runs inside main so a piped install is fully read before it starts.
 main() {
   printf '\n%s  /\\_/\\   Fennec%s\n' "$ACCENT" "$RESET"
   printf '%s ( o.o )  %shold a key, speak, release%s\n\n' "$ACCENT" "$DIM" "$RESET"
   note "Developer beta: Fennec is compiled from source on your Mac, so rough edges are expected."
+
+  agree_to_license
 
   step "Checking this Mac"
   [[ "$(uname -s)" == Darwin ]] || fail "Fennec runs on macOS only."

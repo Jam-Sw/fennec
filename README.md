@@ -236,7 +236,9 @@ zsh ~/.local/share/fennec/src/uninstall.sh --all    # also config, model, certif
 Fennec is source-available under the [PolyForm Strict License 1.0.0](LICENSE). You can
 read the code and use Fennec for personal, noncommercial purposes. Using it for work,
 redistributing it, or publishing modified versions needs a commercial license from
-[Jam-Sw](https://github.com/Jam-Sw).
+Jam-Sw: write to jam.sw.org@gmail.com. Installing or running Fennec means agreeing to
+the [end user license agreement](EULA.txt). Third-party licenses are listed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 Speech recognition uses Desert Ant Labs' `desert-ant-core` package and Voz model under the
 [Desert Ant Labs Source-Available License](https://license.desertant.com/1.0), free below
